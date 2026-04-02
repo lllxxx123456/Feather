@@ -1,88 +1,38 @@
 //
-//  CertificateCellView.swift
-//  Feather
-//
-//  Created by samara on 16.04.2025.
+//  CertificatesCellView.swift
+//  Feather778
 //
 
 import SwiftUI
-import NimbleViews
 
-// MARK: - View
+// Kept for compatibility - main display uses CertificateCardView
 struct CertificatesCellView: View {
-	@State var data: Certificate?
-	
-	@ObservedObject var cert: CertificatePair
-	
-	// MARK: Body
-	var body: some View {
-		VStack(spacing: 6) {
-			let title = {
-				var title = cert.nickname ?? data?.Name ?? .localized("Unknown")
-				
-				if let getTaskAllow = data?.Entitlements?["get-task-allow"]?.value as? Bool, getTaskAllow == true {
-					title = "🐞 \(title)"
-				}
-				
-				return title
-			}()
-			
-			NBTitleWithSubtitleView(
-				title: title,
-				subtitle: data?.AppIDName ?? .localized("Unknown")
-			)
-			
-			_certInfoPill(data: cert)
-		}
-		.frame(height: 80)
-		.contentTransition(.opacity)
-		.frame(maxWidth: .infinity, alignment: .leading)
-		.onAppear {
-			withAnimation {
-				data = Storage.shared.getProvisionFileDecoded(for: cert)
-			}
-		}
-	}
-}
+    let cert: CertificatePair
+    @State private var decoded: Certificate?
 
-// MARK: - Extension: View
-extension CertificatesCellView {
-	@ViewBuilder
-	private func _certInfoPill(data: CertificatePair) -> some View {
-		let pillItems = _buildPills(from: data)
-		HStack(spacing: 6) {
-			ForEach(pillItems.indices, id: \.hashValue) { index in
-				let pill = pillItems[index]
-				NBPillView(
-					title: pill.title,
-					icon: pill.icon,
-					color: pill.color,
-					index: index,
-					count: pillItems.count
-				)
-			}
-		}
-	}
-	
-	private func _buildPills(from cert: CertificatePair) -> [NBPillItem] {
-		var pills: [NBPillItem] = []
-		
-		if cert.ppQCheck == true {
-			pills.append(NBPillItem(title: .localized("PPQCheck"), icon: "checkmark.shield", color: .red))
-		}
-		
-		if cert.revoked == true {
-			pills.append(NBPillItem(title: .localized("Revoked"), icon: "xmark.octagon", color: .red))
-		}
-		
-		if let info = cert.expiration?.expirationInfo() {
-			pills.append(NBPillItem(
-				title: info.formatted,
-				icon: info.icon,
-				color: info.color
-			))
-		}
-		
-		return pills
-	}
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.text.rectangle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(.accentColor)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(cert.nickname ?? decoded?.Name ?? "Certificate")
+                    .font(.system(size: 14, weight: .medium))
+
+                if let decoded = decoded {
+                    Text(decoded.AppIDName)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            FRExpirationPillView(cert: cert)
+        }
+        .onAppear {
+            decoded = Storage.shared.getProvisionFileDecoded(for: cert)
+        }
+    }
 }

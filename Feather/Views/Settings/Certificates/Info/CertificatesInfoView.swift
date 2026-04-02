@@ -1,125 +1,196 @@
 //
 //  CertificatesInfoView.swift
-//  Feather
-//
-//  Created by samara on 20.04.2025.
+//  Feather778
 //
 
 import SwiftUI
 import NimbleViews
-import ZsignSwift
 
-// MARK: - View
 struct CertificatesInfoView: View {
-	@Environment(\.dismiss) var dismiss
-	@State var data: Certificate?
-	
-	var cert: CertificatePair
-	
-	// MARK: Body
-	var body: some View {
-		NBNavigationView(cert.nickname ?? "", displayMode: .inline) {
-			Form {
-				Section {} header: {
-					Image("Cert")
-						.resizable()
-						.scaledToFit()
-						.frame(width: 107, height: 107)
-						.frame(maxWidth: .infinity, alignment: .center)
-				}
-				
-				if let data {
-					_infoSection(data: data)
-					_entitlementsSection(data: data)
-					_miscSection(data: data)
-				}
-				
-				Section {
-					Button(.localized("Open in Files"), systemImage: "folder") {
-						UIApplication.open(Storage.shared.getUuidDirectory(for: cert)!.toSharedDocumentsURL()!)
-					}
-				}
-			}
-			.toolbar {
-				NBToolbarButton(role: .close)
-			}
-		}
-		.onAppear {
-			data = Storage.shared.getProvisionFileDecoded(for: cert)
-		}
-	}
-}
+    @Environment(\.dismiss) var dismiss
+    @State var data: Certificate?
 
-// MARK: - Extension: View
-extension CertificatesInfoView {
-	@ViewBuilder
-	private func _infoSection(data: Certificate) -> some View {
-		NBSection(.localized("Info")) {
-			_info(.localized("Name"), description: data.Name)
-			_info(.localized("AppID Name"), description: data.AppIDName)
-			_info(.localized("Team Name"), description: data.TeamName)
-		}
-		
-		Section {
-			_info(.localized("Expires"), description: data.ExpirationDate.expirationInfo().formatted)
-				.foregroundStyle(data.ExpirationDate.expirationInfo().color)
-			
-			_info(.localized("Revoked"), description: cert.revoked ? "✓" : "✗")
-			
-			if let ppq = data.PPQCheck {
-				_info(.localized("PPQCheck"), description: ppq ? "✓" : "✗")
-			}
-		}
-	}
-	
-	@ViewBuilder
-	private func _entitlementsSection(data: Certificate) -> some View {
-		if let entitlements = data.Entitlements {
-			Section {
-				NavigationLink(.localized("View Entitlements")) {
-					CertificatesInfoEntitlementView(entitlements: entitlements)
-				}
-			}
-		}
-	}
-	
-	@ViewBuilder
-	private func _miscSection(data: Certificate) -> some View {
-		NBSection(.localized("Misc")) {
-			_disclosure(.localized("Platform"), keys: data.Platform)
-			
-			if let all = data.ProvisionsAllDevices {
-				_info(.localized("Provision All Devices"), description: all.description)
-			}
-			
-			if let devices = data.ProvisionedDevices {
-				_disclosure(.localized("Provisioned Devices"), keys: devices)
-			}
-			
-			_disclosure(.localized("Team Identifiers"), keys: data.TeamIdentifier)
-			
-			if let prefix = data.ApplicationIdentifierPrefix{
-				_disclosure(.localized("Identifier Prefix"), keys: prefix)
-			}
-		}
-	}
-	
-	@ViewBuilder
-	private func _info(_ title: String, description: String) -> some View {
-		LabeledContent(title) {
-			Text(description)
-		}
-		.copyableText(description)
-	}
-	
-	@ViewBuilder
-	private func _disclosure(_ title: String, keys: [String]) -> some View {
-		DisclosureGroup(title) {
-			ForEach(keys, id: \.self) { key in
-				Text(key)
-					.foregroundStyle(.secondary)
-					.copyableText(key)
-			}
-		}
-	}
+    var cert: CertificatePair
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {} header: {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.text.rectangle.fill")
+                            .font(.system(size: 52))
+                            .foregroundColor(.accentColor)
+
+                        Text(cert.nickname ?? data?.Name ?? "Certificate")
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+                }
+
+                if let data {
+                    _basicInfoSection(data: data)
+                    _statusSection(data: data)
+                    _entitlementsSection(data: data)
+                    _deviceSection(data: data)
+                    _miscSection(data: data)
+                }
+
+                Section {
+                    Button("Open in Files", systemImage: "folder") {
+                        if let url = Storage.shared.getUuidDirectory(for: cert)?.toSharedDocumentsURL() {
+                            UIApplication.open(url)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Certificate Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .onAppear {
+            data = Storage.shared.getProvisionFileDecoded(for: cert)
+        }
+    }
+
+    @ViewBuilder
+    private func _basicInfoSection(data: Certificate) -> some View {
+        Section(header: Text("Basic Info")) {
+            _row("Common Name", value: data.Name)
+            _row("AppID Name", value: data.AppIDName)
+            _row("Team Name", value: data.TeamName)
+            if let prefix = data.ApplicationIdentifierPrefix?.first {
+                _row("Team ID", value: prefix)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func _statusSection(data: Certificate) -> some View {
+        Section(header: Text("Status")) {
+            HStack {
+                Text("Expiration")
+                Spacer()
+                let info = data.ExpirationDate.expirationInfo()
+                Text(info.formatted)
+                    .foregroundColor(info.color)
+            }
+            .copyableText(data.ExpirationDate.expirationInfo().formatted)
+
+            HStack {
+                Text("Certificate Status")
+                Spacer()
+                Text(cert.revoked ? "Revoked" : "Valid")
+                    .foregroundColor(cert.revoked ? .red : .green)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+
+            HStack {
+                Text("Platform")
+                Spacer()
+                Text(data.Platform.joined(separator: ", "))
+                    .foregroundColor(.secondary)
+            }
+
+            if let ppq = data.PPQCheck {
+                HStack {
+                    Text("PPQCheck")
+                    Spacer()
+                    Text(ppq ? "Yes" : "No")
+                        .foregroundColor(ppq ? .orange : .green)
+                }
+            }
+
+            HStack {
+                Text("Device Support")
+                Spacer()
+                if data.ProvisionsAllDevices == true {
+                    Text("All Devices")
+                        .foregroundColor(.green)
+                } else {
+                    Text("Limited")
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func _entitlementsSection(data: Certificate) -> some View {
+        if let entitlements = data.Entitlements {
+            Section(header: Text("Certificate Permissions")) {
+                NavigationLink("View All Permissions") {
+                    CertificatesInfoEntitlementView(entitlements: entitlements)
+                }
+
+                // Show key entitlements inline
+                if let taskAllow = entitlements["get-task-allow"]?.value as? Bool {
+                    _row("Debug (get-task-allow)", value: taskAllow ? "Yes" : "No")
+                }
+
+                if let appGroups = entitlements["com.apple.security.application-groups"]?.value as? [String] {
+                    NavigationLink("App Groups (\(appGroups.count))") {
+                        List {
+                            ForEach(appGroups, id: \.self) { group in
+                                Text(group)
+                                    .font(.system(size: 13))
+                                    .copyableText(group)
+                            }
+                        }
+                        .navigationTitle("App Groups")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func _deviceSection(data: Certificate) -> some View {
+        if let devices = data.ProvisionedDevices, !devices.isEmpty {
+            Section(header: Text("Bound Devices (\(devices.count))")) {
+                ForEach(devices, id: \.self) { udid in
+                    HStack {
+                        Image(systemName: "iphone")
+                            .foregroundColor(.secondary)
+                        Text(udid)
+                            .font(.system(size: 12, design: .monospaced))
+                    }
+                    .copyableText(udid)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func _miscSection(data: Certificate) -> some View {
+        Section(header: Text("Other Info")) {
+            if let identifiers = data.TeamIdentifier.first {
+                _row("Team ID", value: identifiers)
+            }
+            _row("UUID", value: data.UUID)
+            _row("Version", value: "\(data.Version)")
+            _row("Validity (days)", value: "\(data.TimeToLive)")
+
+            if let managed = data.IsXcodeManaged {
+                _row("Xcode Managed", value: managed ? "Yes" : "No")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func _row(_ title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundColor(.secondary)
+                .font(.system(size: 13))
+                .lineLimit(1)
+        }
+        .copyableText(value)
+    }
 }
