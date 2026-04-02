@@ -5,6 +5,7 @@
 
 import SwiftUI
 import NimbleViews
+import NimbleExtensions
 import UniformTypeIdentifiers
 
 // MARK: - HomeView
@@ -368,8 +369,7 @@ struct AppCardView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                FRAppIconView(app)
-                    .frame(width: 56, height: 56)
+                FRAppIconView(app: app, size: 56)
                     .cornerRadius(12)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -502,8 +502,7 @@ struct SignedAppCardView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                FRAppIconView(app)
-                    .frame(width: 56, height: 56)
+                FRAppIconView(app: app, size: 56)
                     .cornerRadius(12)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -526,7 +525,11 @@ struct SignedAppCardView: View {
                             .cornerRadius(4)
 
                         if let cert = app.certificate {
-                            FRExpirationPillView(cert: cert)
+                            FRExpirationPillView(
+                                title: "Install",
+                                revoked: cert.revoked,
+                                expiration: cert.expiration?.expirationInfo()
+                            )
                         }
                     }
                 }
