@@ -80,9 +80,13 @@ struct AboutView: View {
 	}
 	
 	private func _fetchAllData() async {
+		let dataService = _dataService
+		let creditsUrl = _creditsUrl
+		let donatorsUrl = _donatorsUrl
+
 		await withTaskGroup(of: (String, CreditsDataHandler).self) { group in
-			group.addTask { return await _fetchCredits(self._creditsUrl, using: _dataService) }
-			group.addTask { return await _fetchCredits(self._donatorsUrl, using: _dataService) }
+			group.addTask { return await _fetchCredits(creditsUrl, using: dataService) }
+			group.addTask { return await _fetchCredits(donatorsUrl, using: dataService) }
 			
 			for await (type, result) in group {
 				await MainActor.run {
