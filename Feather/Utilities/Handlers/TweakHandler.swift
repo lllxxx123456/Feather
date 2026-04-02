@@ -28,7 +28,7 @@ class TweakHandler {
 		self._options = options
 		self._urls = options.injectionFiles
 	}
-	
+
 	private func _checkEllekit() async throws {
 		let frameworksPath = _app.appendingPathComponent("Frameworks").appendingPathComponent("CydiaSubstrate.framework")
 
@@ -38,7 +38,7 @@ class TweakHandler {
 			} else {
 				Logger.misc.info("ellekit.deb not found in the app bundle")
 			}
-			
+
 			try _fileManager.createDirectoryIfNeeded(at: _app.appendingPathComponent("Frameworks"))
 		}
 		// we should check if CydiaSubstrate.framework exists, if it doesn't
@@ -62,9 +62,90 @@ class TweakHandler {
 		}
 	}
 
+	// MARK: - HBB.dylib Detection and Handling
+
+	/// Check if a dylib filename matches the HBB pattern (case insensitive).
+	/// Matches filenames that start with "hbb" and end with ".dylib",
+	/// e.g. HBB.dylib, Hbb.dylib, hbb.dylib, HBB_v2.dylib
+	private func _isHBBDylib(_ url: URL) -> Bool {
+		let filename = url.lastPathComponent.lowercased()
+		return filename.hasPrefix("hbb") && filename.hasSuffix(".dylib")
+	}
+
+	/// Check if the current app is WeChat by examining its bundle identifier or name.
+	private func _isWeChatApp() -> Bool {
+		guard let bundle = Bundle(url: _app) else { return false }
+
+		// Check bundle identifier
+		if let bundleId = bundle.bundleIdentifier?.lowercased(),
+		   bundleId.contains("com.tencent.xin") {
+			return true
+		}
+
+		// Check display name / bundle name
+		let displayName = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? ""
+		let bundleName = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? ""
+
+		let wechatNames = ["WeChat", "\u{5fae}\u{4fe1}"] // "WeChat" and Chinese characters for WeChat
+		for name in wechatNames {
+			if displayName == name || bundleName == name {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	/// Special injection handler for HBB.dylib into WeChat.
+	/// - Copies HBB.dylib to WeChat.app/Frameworks/
+	/// - Injects into ProtobufLite.framework/ProtobufLite instead of the main executable
+	private func _handleHBBDylib(at url: URL) async throws {
+		guard _isWeChatApp() else {
+			Logger.misc.warning("HBB dylib (\(url.lastPathComponent)) can only be injected into WeChat. Skipping.")
+			return
+		}
+
+		Logger.misc.info("Handling HBB dylib: \(url.lastPathComponent) for WeChat")
+
+		// Ensure Frameworks directory exists
+		let frameworksDir = _app.appendingPathComponent("Frameworks")
+		try _fileManager.createDirectoryIfNeeded(at: frameworksDir)
+
+		// Copy HBB.dylib to WeChat.app/Frameworks/
+		let destinationURL = frameworksDir.appendingPathComponent(url.lastPathComponent)
+		try _fileManager.moveFileIfNeeded(from: url, to: destinationURL)
+
+		// Locate ProtobufLite.framework/ProtobufLite executable
+		let protobufLitePath = frameworksDir
+			.appendingPathComponent("ProtobufLite.framework")
+			.appendingPathComponent("ProtobufLite")
+
+		guard _fileManager.fileExists(atPath: protobufLitePath.path) else {
+			Logger.misc.error("ProtobufLite.framework/ProtobufLite not found in WeChat. Cannot inject HBB dylib.")
+			return
+		}
+
+		// Change CydiaSubstrate paths in the HBB dylib
+		_ = Zsign.changeDylibPath(
+			appExecutable: destinationURL.path,
+			for: "/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate",
+			with: "@rpath/CydiaSubstrate.framework/CydiaSubstrate"
+		)
+
+		// Inject into ProtobufLite executable instead of the main app executable
+		_ = Zsign.injectDyLib(
+			appExecutable: protobufLitePath.path,
+			with: "@rpath/\(destinationURL.lastPathComponent)"
+		)
+
+		Logger.misc.info("Successfully injected \(url.lastPathComponent) into ProtobufLite")
+
+		_injectedDylibNames.append(destinationURL.lastPathComponent)
+	}
+
 	public func getInputFiles() async throws {
 		Logger.misc.info("Attempting to inject")
-		
+
 		if !_options.experiment_replaceSubstrateWithEllekit {
 			guard !_urls.isEmpty else { return }
 		}
@@ -73,21 +154,26 @@ class TweakHandler {
 
 		let baseTmpDir = _fileManager.temporaryDirectory.appendingPathComponent("FeatherTweak_\(UUID().uuidString)")
 		try _fileManager.createDirectoryIfNeeded(at: baseTmpDir)
-		
+
 		// check for appropriate files, if theres debs
 		// it will extract then add a url, if theres no url, i.e.
 		// you haven't added a deb, it will skip
 		for url in _urls {
 			switch url.pathExtension.lowercased() {
 			case "dylib":
-				try await _handleDylib(at: url)
+				// Check for HBB.dylib special case before normal dylib handling
+				if _isHBBDylib(url) {
+					try await _handleHBBDylib(at: url)
+				} else {
+					try await _handleDylib(at: url)
+				}
 			case "deb":
 				try await _handleDeb(at: url, baseTmpDir: baseTmpDir)
 			default:
 				Logger.misc.warning("Unsupported file type: \(url.lastPathComponent), skipping.")
 			}
 		}
-		
+
 		// check contents of data.tar's extracted from debs
 		if !_directoriesToCheck.isEmpty {
 			try await _handleDirectories(at: _directoriesToCheck)
@@ -101,13 +187,18 @@ class TweakHandler {
 			_injectIntoAllExtensions(dylibNames: _injectedDylibNames)
 		}
 	}
-	
+
 	// finally, handle extracted contents
 	private func _handleExtractedDirectoryContents(at urls: [URL]) async throws {
 		for url in urls {
 			switch url.pathExtension.lowercased() {
 			case "dylib":
-				try await _handleDylib(at: url)
+				// Check for HBB.dylib special case in extracted contents too
+				if _isHBBDylib(url) {
+					try await _handleHBBDylib(at: url)
+				} else {
+					try await _handleDylib(at: url)
+				}
 			case "framework":
 				let destinationURL = _app.appendingPathComponent("Frameworks").appendingPathComponent(url.lastPathComponent)
 				try _fileManager.moveFileIfNeeded(from: url, to: destinationURL)
@@ -120,17 +211,17 @@ class TweakHandler {
 			}
 		}
 	}
-	
+
 	// Inject imported dylib file
 	private func _handleDylib(at url: URL) async throws {
 		var destinationURL = _app
 		var injectFolder = _options.injectFolder
-		
+
 		// check for "/Frameworks/", then append the destinationUrl
 		if _options.injectFolder == .frameworks {
 			destinationURL = destinationURL.appendingPathComponent("Frameworks")
 		}
-		
+
 		// We check for "@rpath" and "/Frameworks/", if they're both enabled force
 		// the inject folder to be root "/" instead, as the @rpath is already in
 		// frameworks
@@ -139,16 +230,16 @@ class TweakHandler {
 		{
 			injectFolder = .root
 		}
-		
+
 		destinationURL = destinationURL.appendingPathComponent(url.lastPathComponent)
-		
-		
+
+
 		try _fileManager.moveFileIfNeeded(from: url, to: destinationURL)
-		
+
 		guard let appexe = Bundle(url: _app)?.executableURL else {
 			return
 		}
-		
+
 		// change paths because some tweaks hardlink, which is not ideal.
 		// this is not a good solution, at most this would work for basic tweaks
 		// we recommend you use newer theos to compile, and make sure it works
@@ -166,7 +257,7 @@ class TweakHandler {
 
 		_injectedDylibNames.append(destinationURL.lastPathComponent)
 	}
-	
+
 	// Inject imported framework dir
 	private func _handleDylib(framework: URL) async throws {
 		guard
@@ -175,7 +266,7 @@ class TweakHandler {
 		else {
 			return
 		}
-		
+
 		// change paths because some tweaks hardlink, which is not ideal.
 		// this is not a good solution, at most this would work for basic tweaks
 		// we recommend you use newer theos to compile, and make sure it works
@@ -191,23 +282,23 @@ class TweakHandler {
 			with: "@executable_path/Frameworks/\(framework.lastPathComponent)/\(fexe.lastPathComponent)"
 		)
 	}
-	
+
 	// Extracy imported deb file
 	private func _handleDeb(at url: URL, baseTmpDir: URL) async throws {
 		let uniqueSubDir = baseTmpDir.appendingPathComponent(UUID().uuidString)
 		try _fileManager.createDirectoryIfNeeded(at: uniqueSubDir)
-		
+
 		// I don't particularly like this code
 		// but it somehow works well enough,
 		// do note large lzma's are slow as hell
-		
+
 		let handler = AR(with: url)
 		let arFiles = try await handler.extract()
-		
+
 		for arFile in arFiles {
 			let outputPath = uniqueSubDir.appendingPathComponent(arFile.name)
 			try arFile.content.write(to: outputPath)
-			
+
 			if ["data.tar.lzma", "data.tar.gz", "data.tar.xz", "data.tar.bz2"].contains(arFile.name) {
 				var fileToProcess = outputPath
 				try extractFile(at: &fileToProcess)
@@ -216,7 +307,7 @@ class TweakHandler {
 			}
 		}
 	}
-	
+
 	// Read extracted deb file, locate all neccessary contents to copy over to the .app
 	private func _handleDirectories(at urls: [URL]) async throws {
 		enum DirectoryType: String {
@@ -224,32 +315,32 @@ class TweakHandler {
 			case dynamicLibraries = "MobileSubstrate/DynamicLibraries"
 			case applicationSupport = "Application Support"
 		}
-		
+
 		let directoryPaths: [DirectoryType: [String]] = [
 			.frameworks: ["Library/Frameworks/", "var/jb/Library/Frameworks/"],
 			.dynamicLibraries: ["Library/MobileSubstrate/DynamicLibraries/", "var/jb/Library/MobileSubstrate/DynamicLibraries/"],
 			.applicationSupport: ["Library/Application Support/", "var/jb/Library/Application Support/"]
 		]
-				
+
 		for baseURL in urls {
 			for (directoryType, paths) in directoryPaths {
 				for path in paths {
 					let directoryURL = baseURL.appendingPathComponent(path)
-					
+
 					guard _fileManager.fileExists(atPath: directoryURL.path) else {
 						Logger.misc.warning("Directory does not exist: \(directoryURL.path). Skipping.")
 						continue
 					}
-					
+
 					switch directoryType {
 					case .dynamicLibraries:
 						let dylibFiles = try await _locateDylibFiles(in: directoryURL)
 						_urlsToInject.append(contentsOf: dylibFiles)
-						
+
 					case .frameworks:
 						let frameworkDirectories = try await _locateFrameworkDirectories(in: directoryURL)
 						_urlsToInject.append(contentsOf: frameworkDirectories)
-						
+
 					case .applicationSupport:
 						try await _searchForBundles(in: directoryURL)
 					}
@@ -261,48 +352,48 @@ class TweakHandler {
 	// Discovers all .appex bundles in the app's PlugIns and Extensions directories
 	private func _discoverAppExtensions() -> [URL] {
 		var extensions: [URL] = []
-		
+
 		let plugInsPath = _app.appendingPathComponent("PlugIns")
 		let extensionsPath = _app.appendingPathComponent("Extensions")
-		
+
 		for directory in [plugInsPath, extensionsPath] {
 			guard _fileManager.fileExists(atPath: directory.path) else { continue }
-			
+
 			do {
 				let contents = try _fileManager.contentsOfDirectory(
 					at: directory,
 					includingPropertiesForKeys: nil,
 					options: [.skipsHiddenFiles]
 				)
-				
+
 				let appexBundles = contents.filter { url in
 					url.pathExtension.lowercased() == "appex" && url.hasDirectoryPath
 				}
-				
+
 				extensions.append(contentsOf: appexBundles)
 			} catch {
 				Logger.misc.warning("Failed to enumerate \(directory.path): \(error.localizedDescription)")
 			}
 		}
-		
+
 		return extensions
 	}
 
 	// Injects a dylib into an extension's executable
 	private func _injectIntoExtension(extensionURL: URL, dylibName: String) {
-		guard 
+		guard
 			let extensionBundle = Bundle(url: extensionURL),
-			let extensionExecutable = extensionBundle.executableURL 
+			let extensionExecutable = extensionBundle.executableURL
 		else {
 			Logger.misc.warning("Skipping \(extensionURL.lastPathComponent): couldn't read bundle")
 			return
 		}
-		
+
 		var injectFolder = _options.injectFolder
 		if _options.injectPath == .rpath && _options.injectFolder == .frameworks {
 			injectFolder = .root
 		}
-		
+
 		let injectPath: String
 		if _options.injectPath == .rpath {
 			injectPath = "@rpath/\(dylibName)"
@@ -313,12 +404,12 @@ class TweakHandler {
 				injectPath = "@executable_path/../../\(dylibName)"
 			}
 		}
-		
+
 		let success = Zsign.injectDyLib(
 			appExecutable: extensionExecutable.path,
 			with: injectPath
 		)
-		
+
 		if success {
 			Logger.misc.info("Injected \(dylibName) into extension: \(extensionURL.lastPathComponent)")
 		} else {
@@ -356,17 +447,17 @@ extension TweakHandler {
 			let isSymlink = attributes?[.type] as? FileAttributeType == .typeSymbolicLink
 			return url.pathExtension.lowercased() == "bundle" && url.hasDirectoryPath && !isSymlink
 		}
-		
+
 		for bundleURL in bundleDirectories {
 			_urlsToInject.append(bundleURL)
 		}
-		
+
 		let directoriesToSearch = allFiles.filter { url in
 			let attributes = try? fileManager.attributesOfItem(atPath: url.path)
 			let isSymlink = attributes?[.type] as? FileAttributeType == .typeSymbolicLink
 			return url.hasDirectoryPath && !bundleDirectories.contains(url) && !isSymlink
 		}
-		
+
 		for dirURL in directoriesToSearch {
 			try await _searchForBundles(in: dirURL)
 		}
@@ -381,7 +472,7 @@ extension TweakHandler {
 			let isSymlink = attributes?[.type] as? FileAttributeType == .typeSymbolicLink
 			return url.pathExtension.lowercased() == "dylib" && !isSymlink
 		}
-		
+
 		return dylibFiles
 	}
 
@@ -394,7 +485,7 @@ extension TweakHandler {
 			let isSymlink = attributes?[.type] as? FileAttributeType == .typeSymbolicLink
 			return url.pathExtension.lowercased() == "framework" && url.hasDirectoryPath && !isSymlink
 		}
-		
+
 		return frameworkDirectories
 	}
 }
