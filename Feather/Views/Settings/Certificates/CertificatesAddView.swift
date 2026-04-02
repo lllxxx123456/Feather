@@ -28,7 +28,7 @@ struct CertificatesAddView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Certificate Files")) {
+                Section {
                     _fileButton(
                         "P12 Certificate",
                         icon: "key.fill",
@@ -42,9 +42,11 @@ struct CertificatesAddView: View {
                         file: provisionURL,
                         action: { isImportingProvision = true }
                     )
+                } header: {
+                    Text("Certificate Files")
                 }
 
-                Section(header: Text("Import from ZIP")) {
+                Section {
                     Button(action: { isImportingZip = true }) {
                         HStack {
                             Image(systemName: "doc.zipper")
@@ -57,12 +59,16 @@ struct CertificatesAddView: View {
                                 .font(.system(size: 13))
                         }
                     }
+                } header: {
+                    Text("Import from ZIP")
                 } footer: {
                     Text("ZIP should contain .p12 and .mobileprovision files")
                 }
 
-                Section(header: Text("Password")) {
+                Section {
                     SecureField("Certificate Password", text: $p12Password)
+                } header: {
+                    Text("Password")
                 } footer: {
                     Text("Enter the password for the P12 private key. Leave blank if none.")
                 }
