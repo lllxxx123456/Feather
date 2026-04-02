@@ -1,204 +1,237 @@
 //
 //  SettingsView.swift
-//  Feather
-//
-//  Created by samara on 10.04.2025.
+//  Feather778
 //
 
 import SwiftUI
 import NimbleViews
-import UIKit
-import Darwin
-import IDeviceSwift
 
-// MARK: - View
 struct SettingsView: View {
-	@AppStorage("feather.selectedCert") private var _storedSelectedCert: Int = 0
-	@State private var _currentIcon: String? = UIApplication.shared.alternateIconName
-	
-	// MARK: Fetch
-	@FetchRequest(
-		entity: CertificatePair.entity(),
-		sortDescriptors: [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)],
-		animation: .snappy
-	) private var _certificates: FetchedResults<CertificatePair>
-	
-	private var selectedCertificate: CertificatePair? {
-		guard
-			_storedSelectedCert >= 0,
-			_storedSelectedCert < _certificates.count
-		else {
-			return nil
-		}
-		return _certificates[_storedSelectedCert]
-	}
+    @ObservedObject private var optionsManager = OptionsManager.shared
 
-    
-	private let _donationsUrl = "https://github.com/sponsors/claration"
-	private let _githubUrl = "https://github.com/claration/Feather"
-    
-	// MARK: Body
-	var body: some View {
-		NBNavigationView(.localized("Settings")) {
-			Form {
-				#if !NIGHTLY && !DEBUG
-					SettingsDonationCellView(site: _donationsUrl)
-				#endif
-                
-				_feedback()
-                
-				Section {
-					NavigationLink(destination: AppearanceView()) {
-						Label(.localized("Appearance"), systemImage: "paintbrush")
-					}
-					NavigationLink(destination: AppIconView(currentIcon: $_currentIcon)) {
-						Label(.localized("App Icon"), systemImage: "app.badge")
-					}
-				}
-                
-				NBSection(.localized("Certificates")) {
-                    
-					if let cert = selectedCertificate {
-						CertificatesCellView(cert: cert)
-					} else {
-						Text(.localized("No Certificate"))
-							.font(.footnote)
-							.foregroundColor(.disabled())
-					}
-					NavigationLink(destination: CertificatesView()) {
-						Label(.localized("Certificates"), systemImage: "checkmark.seal")
-					}
-                 
-				} footer: {
-					Text(.localized("Add and manage certificates used for signing applications."))
-				}
-                
-				NBSection(.localized("Features")) {
-					NavigationLink(destination: ConfigurationView()) {
-						Label(.localized("Signing Options"), systemImage: "signature")
-					}
-					NavigationLink(destination: ArchiveView()) {
-						Label(.localized("Archive & Compression"), systemImage: "archivebox")
-					}
-					NavigationLink(destination: InstallationView()) {
-						Label(.localized("Installation"), systemImage: "arrow.down.circle")
-					}
-				} footer: {
-					Text(.localized("Configure the apps way of installing, its zip compression levels, and custom modifications to apps."))
-				}
-                
-				_directories()
-                
-				Section {
-					NavigationLink(destination: ResetView()) {
-						Label(.localized("Reset"), systemImage: "trash")
-					}
-				} footer: {
-					Text(.localized("Reset the applications sources, certificates, apps, and general contents."))
-				}
-			}
-		}
-	}
+    @State private var showResetAlert = false
+    @State private var showClearDataAlert = false
+
+    var body: some View {
+        NavigationView {
+            Form {
+                _signingConfigSection()
+                _installationSection()
+                _directoriesSection()
+                _aboutSection()
+                _resetSection()
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.large)
+        }
+        .navigationViewStyle(.stack)
+        .withToast()
+    }
+
+    // MARK: - Default Signing Config
+    @ViewBuilder
+    private func _signingConfigSection() -> some View {
+        Section(header: Text("Default Signing Config")) {
+            Toggle(isOn: $optionsManager.options.autoFixJailbreakDeps) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Auto-fix Jailbreak Dependencies")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Automatically adjusts plugin dependencies and directory structure for device compatibility")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.autoFixJailbreakDeps) { _ in optionsManager.saveOptions() }
+
+            Toggle(isOn: $optionsManager.options.enableFileAccess) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Enable File Access")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("View signed app data in the iOS Files app")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.enableFileAccess) { _ in optionsManager.saveOptions() }
+
+            Toggle(isOn: $optionsManager.options.removeAppJumps) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Remove App Redirects")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Remove URL Scheme redirects from the app")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.removeAppJumps) { _ in optionsManager.saveOptions() }
+
+            Toggle(isOn: $optionsManager.options.removeMinVersionLimit) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Remove Min Version Limit")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Remove the minimum iOS version requirement")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.removeMinVersionLimit) { _ in optionsManager.saveOptions() }
+        }
+
+        Section(header: Text("Package Filename")) {
+            Toggle("Include App Name", isOn: Binding(
+                get: { optionsManager.options.packageNameRule & 1 != 0 },
+                set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 1 : optionsManager.options.packageNameRule & ~1; optionsManager.saveOptions() }
+            ))
+            Toggle("Include Version", isOn: Binding(
+                get: { optionsManager.options.packageNameRule & 2 != 0 },
+                set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 2 : optionsManager.options.packageNameRule & ~2; optionsManager.saveOptions() }
+            ))
+            Toggle("Include Timestamp", isOn: Binding(
+                get: { optionsManager.options.packageNameRule & 4 != 0 },
+                set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 4 : optionsManager.options.packageNameRule & ~4; optionsManager.saveOptions() }
+            ))
+        } footer: {
+            Text("At least one option must be selected for the output filename")
+        }
+
+        Section(header: Text("Post-Signing Actions")) {
+            Toggle(isOn: $optionsManager.options.autoInstallAfterSign) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Auto-install After Signing")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Prompt to install the IPA immediately after signing")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.autoInstallAfterSign) { _ in optionsManager.saveOptions() }
+
+            Toggle(isOn: $optionsManager.options.useLocalServer) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Local Server Install")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Use local server with itms-services:// for fully local installation")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.useLocalServer) { _ in optionsManager.saveOptions() }
+
+            Toggle(isOn: $optionsManager.options.deleteAfterSign) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Delete After Signing")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Automatically delete the signed IPA file after signing")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .onChange(of: optionsManager.options.deleteAfterSign) { _ in optionsManager.saveOptions() }
+        }
+    }
+
+    // MARK: - Installation
+    @ViewBuilder
+    private func _installationSection() -> some View {
+        Section(header: Text("Installation")) {
+            NavigationLink(destination: InstallationView()) {
+                HStack {
+                    Image(systemName: "arrow.down.app")
+                        .foregroundColor(.accentColor)
+                    Text("Installation Method")
+                }
+            }
+        }
+    }
+
+    // MARK: - Directories
+    @ViewBuilder
+    private func _directoriesSection() -> some View {
+        Section(header: Text("Directories")) {
+            _directoryLink("Unsigned Apps", icon: "doc.zipper", url: FileManager.default.unsigned)
+            _directoryLink("Signed Apps", icon: "checkmark.seal", url: FileManager.default.signed)
+            _directoryLink("Certificates", icon: "person.text.rectangle", url: FileManager.default.certificates)
+            _directoryLink("Plugins", icon: "puzzlepiece.extension", url: FileManager.default.tweaks)
+        }
+    }
+
+    @ViewBuilder
+    private func _directoryLink(_ title: String, icon: String, url: URL) -> some View {
+        Button(action: {
+            if let shared = url.toSharedDocumentsURL() {
+                UIApplication.open(shared)
+            }
+        }) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(.accentColor)
+                    .frame(width: 24)
+                Text(title)
+                    .foregroundColor(.primary)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+            }
+        }
+    }
+
+    // MARK: - About
+    @ViewBuilder
+    private func _aboutSection() -> some View {
+        Section(header: Text("About")) {
+            HStack {
+                Text("Version")
+                Spacer()
+                Text("\(Bundle.main.version) (\(Bundle.main.buildNumber))")
+                    .foregroundColor(.secondary)
+            }
+
+            HStack {
+                Text("App Name")
+                Spacer()
+                Text("Feather778")
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Reset
+    @ViewBuilder
+    private func _resetSection() -> some View {
+        Section {
+            Button("Reset All Settings", role: .destructive) {
+                showResetAlert = true
+            }
+
+            Button("Clear All Data", role: .destructive) {
+                showClearDataAlert = true
+            }
+        }
+        .alert("Reset Settings", isPresented: $showResetAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                optionsManager.resetToDefaults()
+                ToastManager.shared.show("Settings reset", style: .success)
+            }
+        } message: {
+            Text("This will reset all settings to default values.")
+        }
+        .alert("Clear Data", isPresented: $showClearDataAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear", role: .destructive) {
+                ResetView.clearWorkCache()
+                ToastManager.shared.show("Cache cleared", style: .success)
+            }
+        } message: {
+            Text("This will clear the work cache. Your apps and certificates will not be affected.")
+        }
+    }
 }
 
-// MARK: - View extension
-extension SettingsView {
-	@ViewBuilder
-	private func _feedback() -> some View {
-		Section {
-			NavigationLink(destination: AboutView()) {
-				Label {
-					Text(verbatim: .localized("About %@", arguments: Bundle.main.name))
-				} icon: {
-					FRAppIconView(size: 23)
-				}
-			}
-            
-			Button(.localized("Submit Feedback"), systemImage: "safari") {
-				let bugAction: UIAlertAction = .init(title: .localized("Bug Report"), style: .default) { _ in
-					UIApplication.open(_makeGitHubIssueURL(url: _githubUrl))
-				}
-				
-				let chooseAction: UIAlertAction = .init(title: .localized("Other"), style: .default) { _ in
-					UIApplication.open(URL(string: "\(_githubUrl)/issues/new/choose")!)
-				}
-				
-				UIAlertController.showAlertWithCancel(
-					title: .localized("Submit Feedback"),
-					message: nil,
-					actions: [bugAction, chooseAction]
-				)
-			}
-			Button(.localized("GitHub Repository"), systemImage: "safari") {
-				UIApplication.open(_githubUrl)
-			}
-		} footer: {
-			Text(.localized("If any issues occur within the app please report it via the GitHub repository. When submitting an issue, make sure to submit detailed information."))
-		}
-	}
-    
-	@ViewBuilder
-	private func _directories() -> some View {
-		NBSection(.localized("Misc")) {
-			Button(.localized("Open Documents"), systemImage: "folder") {
-				UIApplication.open(URL.documentsDirectory.toSharedDocumentsURL()!)
-			}
-			Button(.localized("Open Archives"), systemImage: "folder") {
-				UIApplication.open(FileManager.default.archives.toSharedDocumentsURL()!)
-			}
-			Button(.localized("Open Certificates"), systemImage: "folder") {
-				UIApplication.open(FileManager.default.certificates.toSharedDocumentsURL()!)
-			}
-		} footer: {
-			Text(.localized("All of the apps files are contained in the documents directory, here are some quick links to these."))
-		}
-	}
-    
-	private func _makeGitHubIssueURL(url: String) -> String {
-		var configurationSection = "### App Configuration:\n"
-		
-		switch UserDefaults.standard.integer(forKey: "Feather.installationMethod") {
-		case 0: // Server
-			let serverMethod = UserDefaults.standard.integer(forKey: "Feather.serverMethod")
-			let ipFix = UserDefaults.standard.bool(forKey: "Feather.ipFix")
-			let serverType = (serverMethod == 0) ? "Fully Local" : "Semi Local"
-			configurationSection += "- Install method: `Server`\n"
-			configurationSection += "  - Server type: `\(serverType)`\n"
-			configurationSection += "  - IP Fix: `\(ipFix)`\n"
-		case 1: // idevice
-			let pairingPath = HeartbeatManager.pairingFile()
-			let pairingExists = FileManager.default.fileExists(atPath: pairingPath)
-			let pairingStatus = pairingExists ? "`Present`" : "`Not Present`"
-			configurationSection += "- Install method: `idevice`\n"
-			configurationSection += "  - Pairing file: \(pairingStatus)\n"
-		default:
-			configurationSection += "- Install method: `Unknown`\n"
-		}
-        
-		let body = """
-		### Device Information
-		- Device: `\(MobileGestalt().getStringForName("PhysicalHardwareNameString") ?? "Unknown")`
-		- iOS Version: `\(UIDevice.current.systemVersion)`
-		- App Version: `\(Bundle.main.version)`
-		
-		\(configurationSection)
-		
-		### Issue Description
-		<!-- Describe your issue here -->
-		
-		### Steps to Reproduce
-		1. 
-		2. 
-		3. 
-		
-		### Expected Behavior
-		
-		### Actual Behavior
-		"""
-		let encodedTitle = "[Bug] replace this with a descriptive title "
-			.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-		let encodedBody = body
-			.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-		return "\(url)/issues/new?template=bug.yml&title=\(encodedTitle)&text=\(encodedBody)"
-	}
+// Extension for Bundle build number
+extension Bundle {
+    var buildNumber: String {
+        infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
 }
