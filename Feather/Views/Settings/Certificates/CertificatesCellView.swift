@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import NimbleExtensions
 
 // Kept for compatibility - main display uses CertificateCardView
 struct CertificatesCellView: View {
@@ -29,7 +30,11 @@ struct CertificatesCellView: View {
 
             Spacer()
 
-            FRExpirationPillView(cert: cert)
+            FRExpirationPillView(
+                title: "Valid",
+                revoked: cert.revoked,
+                expiration: cert.expiration?.expirationInfo()
+            )
         }
         .onAppear {
             decoded = Storage.shared.getProvisionFileDecoded(for: cert)

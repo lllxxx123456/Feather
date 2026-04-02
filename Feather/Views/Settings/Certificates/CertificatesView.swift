@@ -5,6 +5,7 @@
 
 import SwiftUI
 import NimbleViews
+import NimbleExtensions
 import CoreData
 
 struct CertificatesView: View {
@@ -182,10 +183,6 @@ struct CertificateCardView: View {
                 HStack(spacing: 8) {
                     // Expiration status
                     _statusPill()
-
-                    if cert.revoked {
-                        _pill("Revoked", color: .red)
-                    }
 
                     if let ppq = decoded?.PPQCheck, ppq {
                         _pill("PPQ", color: .orange)
