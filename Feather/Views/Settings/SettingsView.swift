@@ -77,7 +77,7 @@ struct SettingsView: View {
             .onChange(of: optionsManager.options.removeMinVersionLimit) { _ in optionsManager.saveOptions() }
         }
 
-        Section(header: Text("Package Filename")) {
+        Section {
             Toggle("Include App Name", isOn: Binding(
                 get: { optionsManager.options.packageNameRule & 1 != 0 },
                 set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 1 : optionsManager.options.packageNameRule & ~1; optionsManager.saveOptions() }
@@ -90,6 +90,8 @@ struct SettingsView: View {
                 get: { optionsManager.options.packageNameRule & 4 != 0 },
                 set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 4 : optionsManager.options.packageNameRule & ~4; optionsManager.saveOptions() }
             ))
+        } header: {
+            Text("Package Filename")
         } footer: {
             Text("At least one option must be selected for the output filename")
         }
