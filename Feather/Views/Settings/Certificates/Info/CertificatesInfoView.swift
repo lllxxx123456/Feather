@@ -5,6 +5,7 @@
 
 import SwiftUI
 import NimbleViews
+import NimbleExtensions
 
 struct CertificatesInfoView: View {
     @Environment(\.dismiss) var dismiss
