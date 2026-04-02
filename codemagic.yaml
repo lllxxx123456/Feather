@@ -1,0 +1,82 @@
+workflows:
+  feather778-build:
+    name: Build Feather778 IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+    scripts:
+      - name: Install dependencies
+        script: |
+          # Resolve Swift Package Manager dependencies
+          xcodebuild -resolvePackageDependencies \
+            -project Feather.xcodeproj \
+            -scheme Feather \
+            -skipPackagePluginValidation
+
+      - name: Fetch SSL certificates
+        script: |
+          mkdir -p deps
+          CERT_JSON_URL="https://backloop.dev/pack.json"
+          curl -fsSL "$CERT_JSON_URL" -o cert.json || true
+          if [ -f cert.json ]; then
+            jq -r '.cert' cert.json > deps/server.crt 2>/dev/null || true
+            jq -r '.key1, .key2' cert.json > deps/server.pem 2>/dev/null || true
+            jq -r '.info.domains.commonName' cert.json > deps/commonName.txt 2>/dev/null || true
+          fi
+
+      - name: Build Feather778
+        script: |
+          PLATFORM="iphoneos"
+          TMP="$TMPDIR/Feather778"
+          APP="$TMP/Build/Products/Release-$PLATFORM"
+          STAGE="$TMP/stage"
+
+          xcodebuild \
+            -project Feather.xcodeproj \
+            -scheme Feather \
+            -configuration Release \
+            -arch arm64 \
+            -sdk $PLATFORM \
+            -derivedDataPath "$TMP" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=NO \
+            PRODUCT_BUNDLE_IDENTIFIER=com.jijiang.feather778 \
+            INFOPLIST_KEY_CFBundleDisplayName=Feather778
+
+      - name: Package IPA
+        script: |
+          PLATFORM="iphoneos"
+          TMP="$TMPDIR/Feather778"
+          APP="$TMP/Build/Products/Release-$PLATFORM"
+          STAGE="$TMP/stage"
+
+          rm -rf Payload
+          rm -rf "$STAGE/"
+          mkdir -p "$STAGE/Payload"
+
+          mv "$APP/Feather.app" "$STAGE/Payload/Feather.app"
+
+          chmod -R 0755 "$STAGE/Payload/Feather.app"
+          codesign --force --sign - --timestamp=none "$STAGE/Payload/Feather.app"
+
+          # Copy SSL certs if available
+          cp deps/* "$STAGE/Payload/Feather.app/" 2>/dev/null || true
+
+          rm -rf "$STAGE/Payload/Feather.app/_CodeSignature"
+          ln -sf "$STAGE/Payload" Payload
+
+          mkdir -p build/ios/ipa
+          cd "$STAGE" && zip -r9 "$CM_BUILD_DIR/build/ios/ipa/Feather778.ipa" Payload
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+
+    publishing:
+      email:
+        recipients:
+          - user@example.com
+        notify:
+          success: false
+          failure: true
