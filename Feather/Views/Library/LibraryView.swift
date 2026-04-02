@@ -1,273 +1,586 @@
 //
-//  ContentView.swift
-//  Feather
-//
-//  Created by samara on 10.04.2025.
+//  HomeView.swift (replaces LibraryView)
+//  Feather778
 //
 
 import SwiftUI
-import CoreData
 import NimbleViews
+import UniformTypeIdentifiers
 
-// MARK: - View
-struct LibraryView: View {
-	@StateObject var downloadManager = DownloadManager.shared
-	
-	@State private var _selectedInfoAppPresenting: AnyApp?
-	@State private var _selectedSigningAppPresenting: AnyApp?
-	@State private var _selectedInstallAppPresenting: AnyApp?
-	@State private var _isImportingPresenting = false
-	@State private var _isDownloadingPresenting = false
-	@State private var _alertDownloadString: String = "" // for _isDownloadingPresenting
-	
-	// MARK: Selection State
-	@State private var _selectedAppUUIDs: Set<String> = []
-	@State private var _editMode: EditMode = .inactive
-	
-	@State private var _searchText = ""
-	@State private var _selectedScope: Scope = .all
-	
-	
-	@Namespace private var _namespace
-	
-	// horror
-	private func filteredAndSortedApps<T>(from apps: FetchedResults<T>) -> [T] where T: NSManagedObject {
-		apps.filter {
-			_searchText.isEmpty ||
-				(($0.value(forKey: "name") as? String)?.localizedCaseInsensitiveContains(_searchText) ?? false)
-		}
-	}
-	
-	private var _filteredSignedApps: [Signed] {
-		filteredAndSortedApps(from: _signedApps)
-	}
-	
-	private var _filteredImportedApps: [Imported] {
-		filteredAndSortedApps(from: _importedApps)
-	}
-	
-	// MARK: Fetch
-	@FetchRequest(
-		entity: Signed.entity(),
-		sortDescriptors: [NSSortDescriptor(keyPath: \Signed.date, ascending: false)],
-		animation: .snappy
-	) private var _signedApps: FetchedResults<Signed>
-	
-	@FetchRequest(
-		entity: Imported.entity(),
-		sortDescriptors: [NSSortDescriptor(keyPath: \Imported.date, ascending: false)],
-		animation: .snappy
-	) private var _importedApps: FetchedResults<Imported>
-	
-	// MARK: Body
-	var body: some View {
-		NBNavigationView(.localized("Library")) {
-			NBListAdaptable {
-				if
-					!_filteredSignedApps.isEmpty,
-					_selectedScope == .all || _selectedScope == .signed
-				{
-					NBSection(
-						.localized("Signed"),
-						secondary: _filteredSignedApps.count.description
-					) {
-						ForEach(_filteredSignedApps, id: \.uuid) { app in
-							LibraryCellView(
-								app: app,
-								selectedInfoAppPresenting: $_selectedInfoAppPresenting,
-								selectedSigningAppPresenting: $_selectedSigningAppPresenting,
-								selectedInstallAppPresenting: $_selectedInstallAppPresenting,
-								selectedAppUUIDs: $_selectedAppUUIDs
-							)
-							.compatMatchedTransitionSource(id: app.uuid ?? "", ns: _namespace)
-						}
-					}
-				}
-				
-				if
-					!_filteredImportedApps.isEmpty,
-					_selectedScope == .all || _selectedScope == .imported
-				{
-					NBSection(
-						.localized("Imported"),
-						secondary: _filteredImportedApps.count.description
-					) {
-						ForEach(_filteredImportedApps, id: \.uuid) { app in
-							LibraryCellView(
-								app: app,
-								selectedInfoAppPresenting: $_selectedInfoAppPresenting,
-								selectedSigningAppPresenting: $_selectedSigningAppPresenting,
-								selectedInstallAppPresenting: $_selectedInstallAppPresenting,
-								selectedAppUUIDs: $_selectedAppUUIDs
-							)
-							.compatMatchedTransitionSource(id: app.uuid ?? "", ns: _namespace)
-						}
-					}
-				}
-			}
-			.searchable(text: $_searchText, placement: .platform())
-			.compatSearchScopes($_selectedScope) {
-				ForEach(Scope.allCases, id: \.displayName) { scope in
-					Text(scope.displayName).tag(scope)
-				}
-			}
-			.scrollDismissesKeyboard(.interactively)
-			.overlay {
-				if
-					_filteredSignedApps.isEmpty,
-					_filteredImportedApps.isEmpty
-				{
-					if #available(iOS 17, *) {
-						ContentUnavailableView {
-							Label(.localized("No Apps"), systemImage: "questionmark.app.fill")
-						} description: {
-							Text(.localized("Get started by importing your first IPA file."))
-						} actions: {
-							Menu {
-								_importActions()
-							} label: {
-								NBButton(.localized("Import"), style: .text)
-							}
-						}
-					}
-				}
-			}
-			.toolbar {
-				ToolbarItem(placement: .topBarLeading) {
-					EditButton()
-				}
-				
-				if _editMode.isEditing {
-					NBToolbarButton(
-						.localized("Delete"),
-						systemImage: "trash",
-						isDisabled: _selectedAppUUIDs.isEmpty
-					) {
-						_bulkDeleteSelectedApps()
-					}
-				} else {
-					NBToolbarMenu(
-						systemImage: "plus",
-						style: .icon,
-						placement: .topBarTrailing
-					) {
-						_importActions()
-					}
-				}
-			}
-			.environment(\.editMode, $_editMode)
-			.sheet(item: $_selectedInfoAppPresenting) { app in
-				LibraryInfoView(app: app.base)
-			}
-			.sheet(item: $_selectedInstallAppPresenting) { app in
-				InstallPreviewView(app: app.base, isSharing: app.archive)
-					.presentationDetents([.height(200)])
-					.presentationDragIndicator(.visible)
-			}
-			.fullScreenCover(item: $_selectedSigningAppPresenting) { app in
-				SigningView(app: app.base)
-					.compatNavigationTransition(id: app.base.uuid ?? "", ns: _namespace)
-			}
-			.sheet(isPresented: $_isImportingPresenting) {
-				FileImporterRepresentableView(
-					allowedContentTypes:  [.ipa, .tipa],
-					allowsMultipleSelection: true,
-					onDocumentsPicked: { urls in
-						guard !urls.isEmpty else { return }
-						
-						for url in urls {
-							let id = "FeatherManualDownload_\(UUID().uuidString)"
-							let dl = downloadManager.startArchive(from: url, id: id)
-							try? downloadManager.handlePachageFile(url: url, dl: dl)
-						}
-					}
-				)
-				.ignoresSafeArea()
-			}
-			.alert(.localized("Import from URL"), isPresented: $_isDownloadingPresenting) {
-				TextField(.localized("URL"), text: $_alertDownloadString)
-					.textInputAutocapitalization(.never)
-				Button(.localized("Cancel"), role: .cancel) {
-					_alertDownloadString = ""
-				}
-				Button(.localized("OK")) {
-					if let url = URL(string: _alertDownloadString) {
-						_ = downloadManager.startDownload(from: url, id: "FeatherManualDownload_\(UUID().uuidString)")
-					}
-				}
-			}
-			.onReceive(NotificationCenter.default.publisher(for: Notification.Name("Feather.installApp"))) { _ in
-				if let latest = _signedApps.first {
-					_selectedInstallAppPresenting = AnyApp(base: latest)
-				}
-			}
-			.onChange(of: _editMode) { mode in
-				if mode == .inactive {
-					_selectedAppUUIDs.removeAll()
-				}
-			}
-		}
-	}
+// MARK: - HomeView
+struct HomeView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    @StateObject private var downloadManager = DownloadManager.shared
+
+    @State private var selectedTab: Int = 0
+    private let tabTitles = ["Unsigned", "Dynamic Libs", "Signed"]
+
+    @State private var isImportingFile = false
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                _segmentedHeader()
+
+                TabView(selection: $selectedTab) {
+                    UnsignedAppsTab()
+                        .environment(\.managedObjectContext, viewContext)
+                        .tag(0)
+                    DylibsTab()
+                        .tag(1)
+                    SignedAppsTab()
+                        .environment(\.managedObjectContext, viewContext)
+                        .tag(2)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+            }
+            .navigationTitle("Feather778")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button(action: { isImportingFile = true }) {
+                            Label("Import from Files", systemImage: "folder")
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                    }
+                }
+            }
+            .sheet(isPresented: $isImportingFile) {
+                FileImporterRepresentableView(
+                    allowedContentTypes: [.ipa, .tipa, .deb, .dylib],
+                    allowsMultipleSelection: true,
+                    onDocumentsPicked: { urls in
+                        for url in urls {
+                            _handleImportedFile(url)
+                        }
+                    }
+                )
+                .ignoresSafeArea()
+            }
+        }
+        .navigationViewStyle(.stack)
+        .withToast()
+    }
+
+    @ViewBuilder
+    private func _segmentedHeader() -> some View {
+        HStack(spacing: 0) {
+            ForEach(0..<tabTitles.count, id: \.self) { index in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        selectedTab = index
+                    }
+                }) {
+                    VStack(spacing: 8) {
+                        Text(tabTitles[index])
+                            .font(.system(size: 14, weight: selectedTab == index ? .bold : .medium))
+                            .foregroundColor(selectedTab == index ? .primary : .secondary)
+
+                        Rectangle()
+                            .fill(selectedTab == index ? Color.accentColor : Color.clear)
+                            .frame(height: 2.5)
+                            .cornerRadius(1.25)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .background(Color(UIColor.systemBackground))
+    }
+
+    private func _handleImportedFile(_ url: URL) {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "ipa", "tipa":
+            let id = "FeatherManualDownload_\(UUID().uuidString)"
+            let dl = downloadManager.startArchive(from: url, id: id)
+            try? downloadManager.handlePachageFile(url: url, dl: dl)
+        case "deb", "dylib":
+            _importTweak(url)
+        default:
+            ToastManager.shared.show("Unsupported file type", style: .error)
+        }
+    }
+
+    private func _importTweak(_ url: URL) {
+        let fm = FileManager.default
+        try? fm.createDirectoryIfNeeded(at: fm.tweaks)
+
+        let dest = fm.tweaks.appendingPathComponent(url.lastPathComponent)
+        do {
+            try? fm.removeFileIfNeeded(at: dest)
+            try fm.copyItem(at: url, to: dest)
+            ToastManager.shared.show("Plugin imported", style: .success)
+        } catch {
+            ToastManager.shared.show("Import failed: \(error.localizedDescription)", style: .error)
+        }
+    }
 }
 
-// MARK: - Extension: View
-extension LibraryView {
-	@ViewBuilder
-	private func _importActions() -> some View {
-		Button(.localized("Import from Files"), systemImage: "folder") {
-			_isImportingPresenting = true
-		}
-		Button(.localized("Import from URL"), systemImage: "globe") {
-			_isDownloadingPresenting = true
-		}
-	}
+// MARK: - Unsigned Apps Tab
+struct UnsignedAppsTab: View {
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \Imported.date, ascending: false)],
+        animation: .default
+    )
+    private var apps: FetchedResults<Imported>
+
+    @State private var selectedApp: AnyApp?
+    @State private var showingSignView = false
+    @State private var showDeleteAlert = false
+    @State private var appToDelete: Imported?
+
+    var body: some View {
+        ScrollView {
+            if apps.isEmpty {
+                _emptyState(icon: "doc.zipper", text: "No unsigned apps\nImport IPA files to get started")
+            } else {
+                LazyVStack(spacing: 14) {
+                    ForEach(apps, id: \.uuid) { app in
+                        AppCardView(
+                            app: app,
+                            actions: [
+                                .init(title: "Sign", icon: "signature", color: .accentColor) {
+                                    selectedApp = AnyApp(base: app)
+                                    showingSignView = true
+                                },
+                                .init(title: "Extract", icon: "shippingbox", color: .orange) {
+                                    _extractLibs(app)
+                                },
+                                .init(title: "Share", icon: "square.and.arrow.up", color: .blue) {
+                                    _shareApp(app)
+                                },
+                                .init(title: "Delete", icon: "trash", color: .red) {
+                                    appToDelete = app
+                                    showDeleteAlert = true
+                                }
+                            ]
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+        }
+        .alert("Confirm Delete", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let app = appToDelete {
+                    Storage.shared.deleteApp(for: app)
+                    ToastManager.shared.show("Deleted", style: .success)
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete this app? This cannot be undone.")
+        }
+        .fullScreenCover(isPresented: $showingSignView) {
+            if let app = selectedApp {
+                SigningView(app: app.base)
+            }
+        }
+    }
+
+    private func _extractLibs(_ app: AppInfoPresentable) {
+        guard let appDir = Storage.shared.getAppDirectory(for: app) else {
+            ToastManager.shared.show("App not found", style: .error)
+            return
+        }
+
+        let frameworksDir = appDir.appendingPathComponent("Frameworks")
+        let fm = FileManager.default
+
+        guard fm.fileExists(atPath: frameworksDir.path) else {
+            ToastManager.shared.show("No frameworks found", style: .info)
+            return
+        }
+
+        do {
+            let contents = try fm.contentsOfDirectory(at: frameworksDir, includingPropertiesForKeys: nil)
+            var count = 0
+            try fm.createDirectoryIfNeeded(at: fm.tweaks)
+
+            for file in contents {
+                let ext = file.pathExtension.lowercased()
+                if ext == "dylib" || ext == "framework" {
+                    let dest = fm.tweaks.appendingPathComponent(file.lastPathComponent)
+                    try? fm.removeFileIfNeeded(at: dest)
+                    try fm.copyItem(at: file, to: dest)
+                    count += 1
+                }
+            }
+
+            ToastManager.shared.show("Extracted \(count) libraries", style: .success)
+        } catch {
+            ToastManager.shared.show("Extraction failed", style: .error)
+        }
+    }
+
+    private func _shareApp(_ app: AppInfoPresentable) {
+        guard let appDir = Storage.shared.getUuidDirectory(for: app) else { return }
+        UIActivityViewController.show(activityItems: [appDir])
+    }
 }
 
-// MARK: - Extension: Bulk Delete
-extension LibraryView {
-	private func _bulkDeleteSelectedApps() {
-		let selectedApps = _getAllApps().filter { app in
-			guard let uuid = app.uuid else { return false }
-			return _selectedAppUUIDs.contains(uuid)
-		}
-		
-		for app in selectedApps {
-			Storage.shared.deleteApp(for: app)
-		}
-		
-		_selectedAppUUIDs.removeAll()
-		
-		// _editMode = .inactive
-	}
-	
-	private func _getAllApps() -> [AppInfoPresentable] {
-		var allApps: [AppInfoPresentable] = []
-		
-		if _selectedScope == .all || _selectedScope == .signed {
-			allApps.append(contentsOf: _filteredSignedApps)
-		}
-		
-		if _selectedScope == .all || _selectedScope == .imported {
-			allApps.append(contentsOf: _filteredImportedApps)
-		}
-		
-		return allApps
-	}
+// MARK: - Dylibs Tab
+struct DylibsTab: View {
+    @State private var tweakFiles: [URL] = []
+    @State private var showDeleteAlert = false
+    @State private var fileToDelete: URL?
+    @State private var isImporting = false
+
+    var body: some View {
+        ScrollView {
+            if tweakFiles.isEmpty {
+                _emptyState(icon: "puzzlepiece.extension", text: "No plugins\nImport .deb or .dylib files")
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(tweakFiles, id: \.absoluteString) { file in
+                        TweakCardView(url: file) {
+                            fileToDelete = file
+                            showDeleteAlert = true
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+        }
+        .onAppear(perform: _loadTweaks)
+        .alert("Confirm Delete", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let file = fileToDelete {
+                    try? FileManager.default.removeItem(at: file)
+                    _loadTweaks()
+                    ToastManager.shared.show("Plugin deleted", style: .success)
+                }
+            }
+        } message: {
+            Text("Delete this plugin?")
+        }
+    }
+
+    private func _loadTweaks() {
+        let fm = FileManager.default
+        try? fm.createDirectoryIfNeeded(at: fm.tweaks)
+
+        let files = (try? fm.contentsOfDirectory(at: fm.tweaks, includingPropertiesForKeys: [.contentModificationDateKey], options: .skipsHiddenFiles)) ?? []
+
+        tweakFiles = files.filter {
+            let ext = $0.pathExtension.lowercased()
+            return ext == "dylib" || ext == "deb"
+        }.sorted { a, b in
+            let dateA = (try? a.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date.distantPast
+            let dateB = (try? b.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date.distantPast
+            return dateA > dateB
+        }
+    }
 }
 
-// MARK: - Extension: View (Sort)
-extension LibraryView {
-	enum Scope: CaseIterable {
-		case all
-		case signed
-		case imported
-		
-		var displayName: String {
-			switch self {
-			case .all: return .localized("All")
-			case .signed: return .localized("Signed")
-			case .imported: return .localized("Imported")
-			}
-		}
-	}
+// MARK: - Signed Apps Tab
+struct SignedAppsTab: View {
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \Signed.date, ascending: false)],
+        animation: .default
+    )
+    private var apps: FetchedResults<Signed>
+
+    @State private var selectedApp: Signed?
+    @State private var showingInstall = false
+    @State private var showDeleteAlert = false
+    @State private var appToDelete: Signed?
+    @State private var showingInfo = false
+
+    var body: some View {
+        ScrollView {
+            if apps.isEmpty {
+                _emptyState(icon: "checkmark.seal", text: "No signed apps\nSign an IPA to see it here")
+            } else {
+                LazyVStack(spacing: 14) {
+                    ForEach(apps, id: \.uuid) { app in
+                        SignedAppCardView(app: app) {
+                            selectedApp = app
+                            showingInstall = true
+                        } onDelete: {
+                            appToDelete = app
+                            showDeleteAlert = true
+                        } onShare: {
+                            _shareApp(app)
+                        } onInfo: {
+                            selectedApp = app
+                            showingInfo = true
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+        }
+        .alert("Confirm Delete", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let app = appToDelete {
+                    Storage.shared.deleteApp(for: app)
+                    ToastManager.shared.show("Deleted", style: .success)
+                }
+            }
+        } message: {
+            Text("Delete this signed app?")
+        }
+        .sheet(isPresented: $showingInstall) {
+            if let app = selectedApp {
+                InstallPreviewView(app: app)
+                    .presentationDetents([.height(200)])
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: $showingInfo) {
+            if let app = selectedApp {
+                LibraryInfoView(app: app)
+            }
+        }
+    }
+
+    private func _shareApp(_ app: AppInfoPresentable) {
+        guard let appDir = Storage.shared.getUuidDirectory(for: app) else { return }
+        UIActivityViewController.show(activityItems: [appDir])
+    }
+}
+
+// MARK: - App Card View
+struct AppCardView: View {
+    let app: AppInfoPresentable
+    let actions: [CardAction]
+
+    struct CardAction {
+        let title: String
+        let icon: String
+        let color: Color
+        let action: () -> Void
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                FRAppIconView(app)
+                    .frame(width: 56, height: 56)
+                    .cornerRadius(12)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(app.name ?? "Unknown")
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+
+                    Text(app.identifier ?? "")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text("v\(app.version ?? "?")")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.12))
+                            .foregroundColor(.accentColor)
+                            .cornerRadius(4)
+
+                        if let date = app.date {
+                            Text(date, style: .date)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(14)
+
+            Divider()
+
+            HStack(spacing: 0) {
+                ForEach(actions.indices, id: \.self) { index in
+                    Button(action: actions[index].action) {
+                        VStack(spacing: 4) {
+                            Image(systemName: actions[index].icon)
+                                .font(.system(size: 16))
+                            Text(actions[index].title)
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(actions[index].color)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+
+                    if index < actions.count - 1 {
+                        Divider()
+                            .frame(height: 30)
+                    }
+                }
+            }
+        }
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+    }
+}
+
+// MARK: - Tweak Card View
+struct TweakCardView: View {
+    let url: URL
+    let onDelete: () -> Void
+
+    private var fileSize: String {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let size = attrs?[.size] as? Int64 ?? 0
+        return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    private var fileIcon: String {
+        url.pathExtension.lowercased() == "deb" ? "shippingbox.fill" : "puzzlepiece.extension.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: fileIcon)
+                .font(.system(size: 24))
+                .foregroundColor(.accentColor)
+                .frame(width: 48, height: 48)
+                .background(Color.accentColor.opacity(0.1))
+                .cornerRadius(10)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(url.lastPathComponent)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(url.pathExtension.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundColor(.orange)
+                        .cornerRadius(3)
+
+                    Text(fileSize)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 16))
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(14)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
+    }
+}
+
+// MARK: - Signed App Card View
+struct SignedAppCardView: View {
+    let app: Signed
+    let onInstall: () -> Void
+    let onDelete: () -> Void
+    let onShare: () -> Void
+    let onInfo: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                FRAppIconView(app)
+                    .frame(width: 56, height: 56)
+                    .cornerRadius(12)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(app.name ?? "Unknown")
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+
+                    Text(app.identifier ?? "")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text("v\(app.version ?? "?")")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.12))
+                            .foregroundColor(.green)
+                            .cornerRadius(4)
+
+                        if let cert = app.certificate {
+                            FRExpirationPillView(cert: cert)
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(14)
+
+            Divider()
+
+            HStack(spacing: 0) {
+                _actionBtn("Install", icon: "arrow.down.circle", color: .green, action: onInstall)
+                Divider().frame(height: 30)
+                _actionBtn("Share", icon: "square.and.arrow.up", color: .blue, action: onShare)
+                Divider().frame(height: 30)
+                _actionBtn("Info", icon: "info.circle", color: .accentColor, action: onInfo)
+                Divider().frame(height: 30)
+                _actionBtn("Delete", icon: "trash", color: .red, action: onDelete)
+            }
+        }
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+    }
+
+    @ViewBuilder
+    private func _actionBtn(_ title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                Text(title)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+        }
+    }
+}
+
+// MARK: - Empty State Helper
+@ViewBuilder
+func _emptyState(icon: String, text: String) -> some View {
+    VStack(spacing: 16) {
+        Spacer()
+        Image(systemName: icon)
+            .font(.system(size: 48))
+            .foregroundColor(.secondary.opacity(0.5))
+        Text(text)
+            .font(.system(size: 14))
+            .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
+        Spacer()
+    }
+    .frame(maxWidth: .infinity, minHeight: 400)
 }
