@@ -155,7 +155,7 @@ struct CertificatesAddView: View {
             Zip.addCustomFileExtension("zip")
             try Zip.unzipFile(zipURL, destination: tmpDir, overwrite: true, password: nil)
 
-            let contents = try fm.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+            _ = try fm.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
 
             // Search recursively for .p12 and .mobileprovision
             var foundP12: URL?
