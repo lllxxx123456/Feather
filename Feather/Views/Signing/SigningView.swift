@@ -41,13 +41,11 @@ struct SigningView: View {
     init(app: AppInfoPresentable) {
         self.app = app
         let defaultOptions = OptionsManager.shared.options
-        _options = State(initialValue: defaultOptions)
         _selectedCertIndex = State(initialValue: UserDefaults.standard.integer(forKey: "feather.selectedCert"))
         _customName = State(initialValue: app.name ?? "")
         _customBundleID = State(initialValue: app.identifier ?? "")
         _customVersion = State(initialValue: app.version ?? "")
 
-        // Apply default signing config values
         var opts = defaultOptions
         opts.injectionFiles = []
         opts.disInjectionFiles = []
@@ -62,45 +60,30 @@ struct SigningView: View {
     var body: some View {
         NavigationView {
             Form {
-                // MARK: App Icon & Basic Info
                 _appHeaderSection()
-
-                // MARK: Basic Properties
                 _propertiesSection()
-
-                // MARK: Certificate
                 _certificateSection()
-
-                // MARK: Framework Management
                 _frameworkSection()
-
-                // MARK: Tweak Injection
                 _tweakSection()
-
-                // MARK: Injection Settings
                 _injectionSettingsSection()
-
-                // MARK: Other Settings
                 _otherSettingsSection()
-
-                // MARK: Sign Button
                 _signButtonSection()
             }
-            .navigationTitle("Sign Configuration")
+            .navigationTitle("签名配置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
             }
             .sheet(isPresented: $showCertPicker) {
                 NavigationView {
-                    CertificatesView(selection: $selectedCertIndex)
-                        .navigationTitle("Select Certificate")
+                    CertificatesView(selection: $selectedCertIndex, embedded: true)
+                        .navigationTitle("选择证书")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
-                                Button("Done") { showCertPicker = false }
+                                Button("完成") { showCertPicker = false }
                             }
                         }
                 }
@@ -124,10 +107,10 @@ struct SigningView: View {
                     }
                 }
             }
-            .alert("Signing Error", isPresented: $showError) {
-                Button("OK") { }
+            .alert("签名错误", isPresented: $showError) {
+                Button("确定") { }
             } message: {
-                Text(signingError ?? "Unknown error")
+                Text(signingError ?? "未知错误")
             }
             .disabled(isSigning)
             .overlay {
@@ -157,19 +140,19 @@ struct SigningView: View {
                     }
 
                     Menu {
-                        Button("Choose Photo", systemImage: "photo") {
+                        Button("选择照片", systemImage: "photo") {
                             showPhotoPicker = true
                         }
-                        Button("App Built-in Icons", systemImage: "app.gift") {
+                        Button("应用内置图标", systemImage: "app.gift") {
                             showAltIconPicker = true
                         }
                         if customIcon != nil {
-                            Button("Reset Icon", systemImage: "arrow.counterclockwise", role: .destructive) {
+                            Button("重置图标", systemImage: "arrow.counterclockwise", role: .destructive) {
                                 customIcon = nil
                             }
                         }
                     } label: {
-                        Text("Change Icon")
+                        Text("更换图标")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.accentColor)
                     }
@@ -182,17 +165,17 @@ struct SigningView: View {
 
     @ViewBuilder
     private func _propertiesSection() -> some View {
-        Section(header: Text("App Properties")) {
+        Section(header: Text("应用属性")) {
             HStack {
-                Text("Name")
+                Text("名称")
                 Spacer()
-                TextField("App Name", text: $customName)
+                TextField("应用名称", text: $customName)
                     .multilineTextAlignment(.trailing)
                     .textInputAutocapitalization(.never)
             }
 
             HStack {
-                Text("Bundle ID")
+                Text("包名")
                 Spacer()
                 TextField("com.example.app", text: $customBundleID)
                     .multilineTextAlignment(.trailing)
@@ -201,7 +184,7 @@ struct SigningView: View {
             }
 
             HStack {
-                Text("Version")
+                Text("版本")
                 Spacer()
                 TextField("1.0.0", text: $customVersion)
                     .multilineTextAlignment(.trailing)
@@ -213,7 +196,7 @@ struct SigningView: View {
 
     @ViewBuilder
     private func _certificateSection() -> some View {
-        Section(header: Text("Certificate")) {
+        Section(header: Text("证书")) {
             Button(action: { showCertPicker = true }) {
                 HStack {
                     Image(systemName: "person.text.rectangle")
@@ -222,7 +205,7 @@ struct SigningView: View {
                     if let cert = certificate {
                         let decoded = Storage.shared.getProvisionFileDecoded(for: cert)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(cert.nickname ?? decoded?.Name ?? "Certificate")
+                            Text(cert.nickname ?? decoded?.Name ?? "证书")
                                 .foregroundColor(.primary)
                                 .font(.system(size: 14, weight: .medium))
                             if let decoded = decoded {
@@ -232,7 +215,7 @@ struct SigningView: View {
                             }
                         }
                     } else {
-                        Text("Select Certificate")
+                        Text("选择证书")
                             .foregroundColor(.secondary)
                     }
 
@@ -247,16 +230,16 @@ struct SigningView: View {
 
     @ViewBuilder
     private func _frameworkSection() -> some View {
-        Section(header: Text("Internal Libraries")) {
+        Section(header: Text("内部库")) {
             Button(action: { showFrameworkRemover = true }) {
                 HStack {
                     Image(systemName: "folder.badge.minus")
                         .foregroundColor(.orange)
-                    Text("Remove Libraries")
+                    Text("移除库文件")
                         .foregroundColor(.primary)
                     Spacer()
                     if !options.removeFiles.isEmpty {
-                        Text("\(options.removeFiles.count) selected")
+                        Text("已选 \(options.removeFiles.count) 个")
                             .foregroundColor(.secondary)
                             .font(.system(size: 13))
                     }
@@ -270,16 +253,16 @@ struct SigningView: View {
 
     @ViewBuilder
     private func _tweakSection() -> some View {
-        Section(header: Text("Plugin Injection")) {
+        Section(header: Text("插件注入")) {
             Button(action: { showTweakPicker = true }) {
                 HStack {
                     Image(systemName: "puzzlepiece.extension")
                         .foregroundColor(.green)
-                    Text("Add Plugins")
+                    Text("添加插件")
                         .foregroundColor(.primary)
                     Spacer()
                     if !selectedTweaks.isEmpty {
-                        Text("\(selectedTweaks.count) selected")
+                        Text("已选 \(selectedTweaks.count) 个")
                             .foregroundColor(.secondary)
                             .font(.system(size: 13))
                     }
@@ -308,13 +291,13 @@ struct SigningView: View {
 
     @ViewBuilder
     private func _injectionSettingsSection() -> some View {
-        Section(header: Text("Injection Settings")) {
-            Picker("Inject Path", selection: $options.injectPath) {
+        Section(header: Text("注入设置")) {
+            Picker("注入路径", selection: $options.injectPath) {
                 Text("@executable_path").tag(Options.InjectPath.executable_path)
                 Text("@rpath").tag(Options.InjectPath.rpath)
             }
 
-            Picker("Inject Directory", selection: $options.injectFolder) {
+            Picker("注入目录", selection: $options.injectFolder) {
                 Text("/").tag(Options.InjectFolder.root)
                 Text("Frameworks/").tag(Options.InjectFolder.frameworks)
             }
@@ -323,10 +306,10 @@ struct SigningView: View {
 
     @ViewBuilder
     private func _otherSettingsSection() -> some View {
-        Section(header: Text("Other Settings")) {
-            Toggle("Remove Min Version Limit", isOn: $options.removeMinVersionLimit)
-            Toggle("Enable File Access", isOn: $options.enableFileAccess)
-            Toggle("Auto-fix Jailbreak Deps", isOn: $options.autoFixJailbreakDeps)
+        Section(header: Text("其他设置")) {
+            Toggle("移除最低版本限制", isOn: $options.removeMinVersionLimit)
+            Toggle("启用文件访问", isOn: $options.enableFileAccess)
+            Toggle("自动修复越狱依赖", isOn: $options.autoFixJailbreakDeps)
         }
     }
 
@@ -341,7 +324,7 @@ struct SigningView: View {
                             .tint(.white)
                     } else {
                         Image(systemName: "signature")
-                        Text("Start Signing")
+                        Text("开始签名")
                             .font(.system(size: 16, weight: .bold))
                     }
                     Spacer()
@@ -367,7 +350,7 @@ struct SigningView: View {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
-                Text("Signing...")
+                Text("签名中...")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
             }
@@ -386,14 +369,12 @@ struct SigningView: View {
 
         isSigning = true
 
-        // Apply user modifications to options
         var signingOptions = options
         signingOptions.appName = customName.isEmpty ? nil : (customName == app.name ? nil : customName)
         signingOptions.appIdentifier = customBundleID.isEmpty ? nil : (customBundleID == app.identifier ? nil : customBundleID)
         signingOptions.appVersion = customVersion.isEmpty ? nil : (customVersion == app.version ? nil : customVersion)
         signingOptions.injectionFiles = selectedTweaks
 
-        // Apply default config toggles
         if signingOptions.enableFileAccess {
             signingOptions.fileSharing = true
             signingOptions.itunesFileSharing = true
@@ -417,7 +398,7 @@ struct SigningView: View {
                 signingError = error.localizedDescription
                 showError = true
             } else {
-                ToastManager.shared.show("Signing completed!", style: .success)
+                ToastManager.shared.show("签名完成！", style: .success)
 
                 if signingOptions.post_deleteAppAfterSigned || signingOptions.deleteAfterSign {
                     Storage.shared.deleteApp(for: app)
@@ -446,19 +427,32 @@ struct TweakPickerView: View {
         NavigationView {
             List {
                 if availableTweaks.isEmpty {
-                    Text("No plugins available.\nImport .deb or .dylib files first.")
+                    Text("暂无可用插件\n请先导入 .deb 或 .dylib 文件")
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding()
                 } else {
+                    Section {
+                        Button(action: _toggleAll) {
+                            HStack {
+                                Image(systemName: selected.count == availableTweaks.count ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(selected.count == availableTweaks.count ? .accentColor : .secondary)
+                                Text("全选")
+                                    .foregroundColor(.primary)
+                                    .font(.system(size: 14, weight: .medium))
+                                Spacer()
+                            }
+                        }
+                    }
+
                     ForEach(availableTweaks, id: \.absoluteString) { tweak in
                         Button(action: { _toggle(tweak) }) {
                             HStack {
                                 Image(systemName: selected.contains(tweak.absoluteString) ? "checkmark.circle.fill" : "circle")
                                     .foregroundColor(selected.contains(tweak.absoluteString) ? .accentColor : .secondary)
 
-                                Image(systemName: tweak.pathExtension == "deb" ? "shippingbox" : "puzzlepiece")
+                                Image(systemName: _tweakIcon(tweak))
                                     .foregroundColor(.accentColor)
 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -476,14 +470,14 @@ struct TweakPickerView: View {
                     }
                 }
             }
-            .navigationTitle("Select Plugins")
+            .navigationTitle("选择插件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("完成") {
                         selectedTweaks = availableTweaks.filter { selected.contains($0.absoluteString) }
                         dismiss()
                     }
@@ -496,6 +490,14 @@ struct TweakPickerView: View {
         }
     }
 
+    private func _tweakIcon(_ url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "deb": return "shippingbox"
+        case "zip": return "doc.zipper"
+        default: return "puzzlepiece"
+        }
+    }
+
     private func _toggle(_ url: URL) {
         let key = url.absoluteString
         if selected.contains(key) {
@@ -505,13 +507,21 @@ struct TweakPickerView: View {
         }
     }
 
+    private func _toggleAll() {
+        if selected.count == availableTweaks.count {
+            selected.removeAll()
+        } else {
+            selected = Set(availableTweaks.map(\.absoluteString))
+        }
+    }
+
     private func _loadTweaks() {
         let fm = FileManager.default
         try? fm.createDirectoryIfNeeded(at: fm.tweaks)
         let files = (try? fm.contentsOfDirectory(at: fm.tweaks, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
         availableTweaks = files.filter {
             let ext = $0.pathExtension.lowercased()
-            return ext == "dylib" || ext == "deb"
+            return ext == "dylib" || ext == "deb" || ext == "zip"
         }
     }
 }
