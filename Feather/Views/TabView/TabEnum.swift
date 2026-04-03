@@ -8,9 +8,9 @@ enum TabEnum: String, CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .home: return "Home"
-        case .certificates: return "Certificates"
-        case .settings: return "Settings"
+        case .home: return "主页"
+        case .certificates: return "证书"
+        case .settings: return "设置"
         }
     }
 
