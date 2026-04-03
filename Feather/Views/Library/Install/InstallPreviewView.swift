@@ -116,7 +116,7 @@ struct InstallPreviewView: View {
 				Button {
 					UIApplication.openApp(with: app.identifier ?? "")
 				} label: {
-					NBButton("Open", systemImage: "", style: .text)
+					NBButton("打开", systemImage: "", style: .text)
 				}
 				.padding()
 				.compatTransition()
