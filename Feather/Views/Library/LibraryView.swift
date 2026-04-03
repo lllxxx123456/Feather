@@ -324,7 +324,7 @@ struct LibraryExtractView: View {
                     Button("取消") { dismiss() }
                 }
             }
-            .onAppear(_loadFiles)
+            .onAppear(perform: _loadFiles)
             .disabled(isExtracting)
         }
     }
@@ -424,6 +424,9 @@ struct LibraryExtractView: View {
     private func _extractSelected() {
         isExtracting = true
 
+        let filesToExtract = allFiles.filter { selectedFiles.contains($0.id) }
+        let appName = app.name ?? "Libraries"
+
         Task.detached {
             let fm = FileManager.default
             let tmpDir = fm.temporaryDirectory.appendingPathComponent("Extract_\(UUID().uuidString)")
@@ -431,7 +434,6 @@ struct LibraryExtractView: View {
             do {
                 try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
 
-                let filesToExtract = allFiles.filter { selectedFiles.contains($0.id) }
                 for file in filesToExtract {
                     let dest = tmpDir.appendingPathComponent(file.name)
                     try? fm.removeItem(at: dest)
@@ -439,7 +441,6 @@ struct LibraryExtractView: View {
                 }
 
                 // Create zip
-                let appName = app.name ?? "Libraries"
                 let zipName = "\(appName)_libs_\(Int(Date().timeIntervalSince1970)).zip"
                 let zipPath = fm.tweaks.appendingPathComponent(zipName)
 
