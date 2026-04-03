@@ -89,7 +89,7 @@ struct FeatherApp: App {
                         UIAlertController.showAlertWithOk(title: "Error", message: error.localizedDescription)
                     } else {
                         generator.notificationOccurred(.success)
-                        ToastManager.shared.show("Certificate imported!", style: .success)
+                        ToastManager.shared.show("证书已导入！", style: .success)
                     }
                 }
                 return
@@ -121,13 +121,13 @@ struct FeatherApp: App {
                     FR.handlePackageFile(url) { error in
                         url.stopAccessingSecurityScopedResource()
                         if error == nil {
-                            ToastManager.shared.show("IPA imported!", style: .success)
+                            ToastManager.shared.show("IPA 已导入！", style: .success)
                         }
                     }
                 } else {
                     FR.handlePackageFile(url) { error in
                         if error == nil {
-                            ToastManager.shared.show("IPA imported!", style: .success)
+                            ToastManager.shared.show("IPA 已导入！", style: .success)
                         }
                     }
                 }
@@ -144,14 +144,14 @@ struct FeatherApp: App {
                 let dest = fm.temporaryDirectory.appendingPathComponent("pending_cert.p12")
                 try? fm.removeFileIfNeeded(at: dest)
                 try? fm.copyItem(at: url, to: dest)
-                ToastManager.shared.show("P12 file ready - open Certificates to complete import", style: .info)
+                ToastManager.shared.show("P12 文件已就绪 - 请前往证书页面完成导入", style: .info)
 
             case "mobileprovision":
                 let fm = FileManager.default
                 let dest = fm.temporaryDirectory.appendingPathComponent("pending_cert.mobileprovision")
                 try? fm.removeFileIfNeeded(at: dest)
                 try? fm.copyItem(at: url, to: dest)
-                ToastManager.shared.show("Profile ready - open Certificates to complete import", style: .info)
+                ToastManager.shared.show("描述文件已就绪 - 请前往证书页面完成导入", style: .info)
 
             default:
                 break
@@ -172,9 +172,9 @@ struct FeatherApp: App {
         do {
             try? fm.removeFileIfNeeded(at: dest)
             try fm.copyItem(at: url, to: dest)
-            ToastManager.shared.show("Plugin imported!", style: .success)
+            ToastManager.shared.show("插件已导入！", style: .success)
         } catch {
-            ToastManager.shared.show("Import failed", style: .error)
+            ToastManager.shared.show("导入失败", style: .error)
         }
 
         if shouldAccessSecurity {
@@ -229,27 +229,27 @@ struct FeatherApp: App {
                                 p12Password: password
                             ) { error in
                                 if error == nil {
-                                    ToastManager.shared.show("Certificate imported from ZIP!", style: .success)
+                                    ToastManager.shared.show("已从 ZIP 导入证书！", style: .success)
                                 } else {
-                                    ToastManager.shared.show("Certificate import failed", style: .error)
+                                    ToastManager.shared.show("证书导入失败", style: .error)
                                 }
                                 try? fm.removeItem(at: tmpDir)
                             }
                         } else {
-                            ToastManager.shared.show("Invalid certificate password in ZIP", style: .error)
+                            ToastManager.shared.show("ZIP 中证书密码无效", style: .error)
                             try? fm.removeItem(at: tmpDir)
                         }
                     }
                 } else {
                     try? fm.removeItem(at: tmpDir)
                     await MainActor.run {
-                        ToastManager.shared.show("No certificate files found in ZIP", style: .info)
+                        ToastManager.shared.show("ZIP 中未找到证书文件", style: .info)
                     }
                 }
             } catch {
                 try? fm.removeItem(at: tmpDir)
                 await MainActor.run {
-                    ToastManager.shared.show("Failed to process ZIP", style: .error)
+                    ToastManager.shared.show("ZIP 处理失败", style: .error)
                 }
             }
         }
