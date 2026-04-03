@@ -23,8 +23,9 @@ struct CertificatesView: View {
     @State private var certToDelete: CertificatePair?
 
     private var _isEmbedded: Bool
+    private var _skipNavigationView: Bool
 
-    init(selection: Binding<Int>? = nil) {
+    init(selection: Binding<Int>? = nil, embedded: Bool = false) {
         if let sel = selection {
             _selection = sel
             _isEmbedded = true
@@ -32,100 +33,110 @@ struct CertificatesView: View {
             _selection = .constant(-1)
             _isEmbedded = false
         }
+        _skipNavigationView = embedded
     }
 
     var body: some View {
-        NavigationView {
-            ScrollView {
-                if certificates.isEmpty {
-                    VStack(spacing: 16) {
-                        Spacer().frame(height: 80)
-                        Image(systemName: "person.text.rectangle")
-                            .font(.system(size: 52))
-                            .foregroundColor(.secondary.opacity(0.4))
-                        Text("No Certificates")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        Text("Import a P12 certificate with its\nmobile provisioning profile")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary.opacity(0.7))
-                            .multilineTextAlignment(.center)
+        if _skipNavigationView {
+            _content()
+        } else {
+            NavigationView {
+                _content()
+            }
+            .navigationViewStyle(.stack)
+            .withToast()
+        }
+    }
 
-                        Button(action: { showAddCert = true }) {
-                            Label("Import Certificate", systemImage: "plus.circle.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 10)
-                                .background(Color.accentColor)
-                                .foregroundColor(.white)
-                                .cornerRadius(20)
-                        }
-                        .padding(.top, 8)
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    LazyVStack(spacing: 14) {
-                        ForEach(Array(certificates.enumerated()), id: \.element.uuid) { index, cert in
-                            CertificateCardView(
-                                cert: cert,
-                                isSelected: _isEmbedded && selection == index
-                            ) {
-                                if _isEmbedded {
-                                    selection = index
-                                    UserDefaults.standard.set(index, forKey: "feather.selectedCert")
-                                } else {
-                                    selectedCert = cert
-                                    showInfo = true
-                                }
-                            } onDelete: {
-                                if !cert.isDefault {
-                                    certToDelete = cert
-                                    showDeleteAlert = true
-                                } else {
-                                    ToastManager.shared.show("Cannot delete default certificate", style: .error)
-                                }
-                            } onCheckRevoke: {
-                                Storage.shared.revokagedCertificate(for: cert)
-                                ToastManager.shared.show("Checking revocation status...", style: .info)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                }
-            }
-            .navigationTitle("Certificates")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+    @ViewBuilder
+    private func _content() -> some View {
+        ScrollView {
+            if certificates.isEmpty {
+                VStack(spacing: 16) {
+                    Spacer().frame(height: 80)
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: 52))
+                        .foregroundColor(.secondary.opacity(0.4))
+                    Text("暂无证书")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Text("请导入 P12 证书及其\n描述文件")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .multilineTextAlignment(.center)
+
                     Button(action: { showAddCert = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
+                        Label("导入证书", systemImage: "plus.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(20)
+                    }
+                    .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                LazyVStack(spacing: 14) {
+                    ForEach(Array(certificates.enumerated()), id: \.element.uuid) { index, cert in
+                        CertificateCardView(
+                            cert: cert,
+                            isSelected: _isEmbedded && selection == index
+                        ) {
+                            if _isEmbedded {
+                                selection = index
+                                UserDefaults.standard.set(index, forKey: "feather.selectedCert")
+                            } else {
+                                selectedCert = cert
+                                showInfo = true
+                            }
+                        } onDelete: {
+                            if !cert.isDefault {
+                                certToDelete = cert
+                                showDeleteAlert = true
+                            } else {
+                                ToastManager.shared.show("无法删除默认证书", style: .error)
+                            }
+                        } onCheckRevoke: {
+                            Storage.shared.revokagedCertificate(for: cert)
+                            ToastManager.shared.show("正在检查吊销状态...", style: .info)
+                        }
                     }
                 }
-            }
-            .sheet(isPresented: $showAddCert) {
-                CertificatesAddView()
-            }
-            .sheet(isPresented: $showInfo) {
-                if let cert = selectedCert {
-                    CertificatesInfoView(cert: cert)
-                }
-            }
-            .alert("Delete Certificate", isPresented: $showDeleteAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    if let cert = certToDelete {
-                        Storage.shared.deleteCertificate(for: cert)
-                        ToastManager.shared.show("Certificate deleted", style: .success)
-                    }
-                }
-            } message: {
-                Text("Are you sure you want to delete this certificate?")
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
         }
-        .navigationViewStyle(.stack)
-        .withToast()
+        .navigationTitle("证书")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showAddCert = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                }
+            }
+        }
+        .sheet(isPresented: $showAddCert) {
+            CertificatesAddView()
+        }
+        .sheet(isPresented: $showInfo) {
+            if let cert = selectedCert {
+                CertificatesInfoView(cert: cert)
+            }
+        }
+        .alert("删除证书", isPresented: $showDeleteAlert) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) {
+                if let cert = certToDelete {
+                    Storage.shared.deleteCertificate(for: cert)
+                    ToastManager.shared.show("证书已删除", style: .success)
+                }
+            }
+        } message: {
+            Text("确定要删除此证书吗？")
+        }
     }
 }
 
@@ -156,10 +167,10 @@ struct CertificateCardView: View {
                     }
 
                     Menu {
-                        Button("View Details", systemImage: "info.circle") { onTap() }
-                        Button("Check Revocation", systemImage: "shield.checkered") { onCheckRevoke() }
+                        Button("查看详情", systemImage: "info.circle") { onTap() }
+                        Button("检查吊销", systemImage: "shield.checkered") { onCheckRevoke() }
                         Divider()
-                        Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+                        Button("删除", systemImage: "trash", role: .destructive) { onDelete() }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .foregroundColor(.secondary)
@@ -167,7 +178,7 @@ struct CertificateCardView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(cert.nickname ?? decoded?.Name ?? "Certificate")
+                    Text(cert.nickname ?? decoded?.Name ?? "证书")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
@@ -181,7 +192,6 @@ struct CertificateCardView: View {
                 }
 
                 HStack(spacing: 8) {
-                    // Expiration status
                     _statusPill()
 
                     if let ppq = decoded?.PPQCheck, ppq {
@@ -189,7 +199,7 @@ struct CertificateCardView: View {
                     }
 
                     if let taskAllow = decoded?.Entitlements?["get-task-allow"]?.value as? Bool, taskAllow {
-                        _pill("Debug", color: .purple)
+                        _pill("调试", color: .purple)
                     }
                 }
             }
@@ -204,10 +214,10 @@ struct CertificateCardView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("View Details", systemImage: "info.circle") { onTap() }
-            Button("Check Revocation", systemImage: "shield.checkered") { onCheckRevoke() }
+            Button("查看详情", systemImage: "info.circle") { onTap() }
+            Button("检查吊销", systemImage: "shield.checkered") { onCheckRevoke() }
             Divider()
-            Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+            Button("删除", systemImage: "trash", role: .destructive) { onDelete() }
         }
         .onAppear {
             decoded = Storage.shared.getProvisionFileDecoded(for: cert)
@@ -217,12 +227,12 @@ struct CertificateCardView: View {
     @ViewBuilder
     private func _statusPill() -> some View {
         if cert.revoked {
-            _pill("Revoked", color: .red)
+            _pill("已吊销", color: .red)
         } else {
             let info = cert.expiration?.expirationInfo()
             let isExpired = info?.color == .red
             _pill(
-                isExpired ? "Expired" : "Valid",
+                isExpired ? "已过期" : "有效",
                 color: isExpired ? .red : .green
             )
         }

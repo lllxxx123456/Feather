@@ -22,7 +22,7 @@ struct CertificatesInfoView: View {
                             .font(.system(size: 52))
                             .foregroundColor(.accentColor)
 
-                        Text(cert.nickname ?? data?.Name ?? "Certificate")
+                        Text(cert.nickname ?? data?.Name ?? "证书")
                             .font(.system(size: 18, weight: .bold))
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -38,18 +38,18 @@ struct CertificatesInfoView: View {
                 }
 
                 Section {
-                    Button("Open in Files", systemImage: "folder") {
+                    Button("在文件中打开", systemImage: "folder") {
                         if let url = Storage.shared.getUuidDirectory(for: cert)?.toSharedDocumentsURL() {
                             UIApplication.open(url)
                         }
                     }
                 }
             }
-            .navigationTitle("Certificate Details")
+            .navigationTitle("证书详情")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("完成") { dismiss() }
                 }
             }
         }
@@ -60,21 +60,21 @@ struct CertificatesInfoView: View {
 
     @ViewBuilder
     private func _basicInfoSection(data: Certificate) -> some View {
-        Section(header: Text("Basic Info")) {
-            _row("Common Name", value: data.Name)
-            _row("AppID Name", value: data.AppIDName)
-            _row("Team Name", value: data.TeamName)
+        Section(header: Text("基本信息")) {
+            _row("通用名称", value: data.Name)
+            _row("AppID 名称", value: data.AppIDName)
+            _row("团队名称", value: data.TeamName)
             if let prefix = data.ApplicationIdentifierPrefix?.first {
-                _row("Team ID", value: prefix)
+                _row("团队 ID", value: prefix)
             }
         }
     }
 
     @ViewBuilder
     private func _statusSection(data: Certificate) -> some View {
-        Section(header: Text("Status")) {
+        Section(header: Text("状态")) {
             HStack {
-                Text("Expiration")
+                Text("到期时间")
                 Spacer()
                 let info = data.ExpirationDate.expirationInfo()
                 Text(info.formatted)
@@ -83,15 +83,15 @@ struct CertificatesInfoView: View {
             .copyableText(data.ExpirationDate.expirationInfo().formatted)
 
             HStack {
-                Text("Certificate Status")
+                Text("证书状态")
                 Spacer()
-                Text(cert.revoked ? "Revoked" : "Valid")
+                Text(cert.revoked ? "已吊销" : "有效")
                     .foregroundColor(cert.revoked ? .red : .green)
                     .font(.system(size: 14, weight: .semibold))
             }
 
             HStack {
-                Text("Platform")
+                Text("平台")
                 Spacer()
                 Text(data.Platform.joined(separator: ", "))
                     .foregroundColor(.secondary)
@@ -101,19 +101,19 @@ struct CertificatesInfoView: View {
                 HStack {
                     Text("PPQCheck")
                     Spacer()
-                    Text(ppq ? "Yes" : "No")
+                    Text(ppq ? "是" : "否")
                         .foregroundColor(ppq ? .orange : .green)
                 }
             }
 
             HStack {
-                Text("Device Support")
+                Text("设备支持")
                 Spacer()
                 if data.ProvisionsAllDevices == true {
-                    Text("All Devices")
+                    Text("所有设备")
                         .foregroundColor(.green)
                 } else {
-                    Text("Limited")
+                    Text("受限")
                         .foregroundColor(.orange)
                 }
             }
@@ -123,18 +123,17 @@ struct CertificatesInfoView: View {
     @ViewBuilder
     private func _entitlementsSection(data: Certificate) -> some View {
         if let entitlements = data.Entitlements {
-            Section(header: Text("Certificate Permissions")) {
-                NavigationLink("View All Permissions") {
+            Section(header: Text("证书权限")) {
+                NavigationLink("查看所有权限") {
                     CertificatesInfoEntitlementView(entitlements: entitlements)
                 }
 
-                // Show key entitlements inline
                 if let taskAllow = entitlements["get-task-allow"]?.value as? Bool {
-                    _row("Debug (get-task-allow)", value: taskAllow ? "Yes" : "No")
+                    _row("调试 (get-task-allow)", value: taskAllow ? "是" : "否")
                 }
 
                 if let appGroups = entitlements["com.apple.security.application-groups"]?.value as? [String] {
-                    NavigationLink("App Groups (\(appGroups.count))") {
+                    NavigationLink("应用群组 (\(appGroups.count))") {
                         List {
                             ForEach(appGroups, id: \.self) { group in
                                 Text(group)
@@ -142,7 +141,7 @@ struct CertificatesInfoView: View {
                                     .copyableText(group)
                             }
                         }
-                        .navigationTitle("App Groups")
+                        .navigationTitle("应用群组")
                     }
                 }
             }
@@ -152,7 +151,7 @@ struct CertificatesInfoView: View {
     @ViewBuilder
     private func _deviceSection(data: Certificate) -> some View {
         if let devices = data.ProvisionedDevices, !devices.isEmpty {
-            Section(header: Text("Bound Devices (\(devices.count))")) {
+            Section(header: Text("绑定设备 (\(devices.count))")) {
                 ForEach(devices, id: \.self) { udid in
                     HStack {
                         Image(systemName: "iphone")
@@ -168,16 +167,16 @@ struct CertificatesInfoView: View {
 
     @ViewBuilder
     private func _miscSection(data: Certificate) -> some View {
-        Section(header: Text("Other Info")) {
+        Section(header: Text("其他信息")) {
             if let identifiers = data.TeamIdentifier.first {
-                _row("Team ID", value: identifiers)
+                _row("团队 ID", value: identifiers)
             }
             _row("UUID", value: data.UUID)
-            _row("Version", value: "\(data.Version)")
-            _row("Validity (days)", value: "\(data.TimeToLive)")
+            _row("版本", value: "\(data.Version)")
+            _row("有效期（天）", value: "\(data.TimeToLive)")
 
             if let managed = data.IsXcodeManaged {
-                _row("Xcode Managed", value: managed ? "Yes" : "No")
+                _row("Xcode 管理", value: managed ? "是" : "否")
             }
         }
     }

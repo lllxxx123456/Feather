@@ -21,7 +21,7 @@ struct SettingsView: View {
                 _aboutSection()
                 _resetSection()
             }
-            .navigationTitle("Settings")
+            .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.large)
         }
         .navigationViewStyle(.stack)
@@ -31,12 +31,12 @@ struct SettingsView: View {
     // MARK: - Default Signing Config
     @ViewBuilder
     private func _signingConfigSection() -> some View {
-        Section(header: Text("Default Signing Config")) {
+        Section(header: Text("默认签名配置")) {
             Toggle(isOn: $optionsManager.options.autoFixJailbreakDeps) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Auto-fix Jailbreak Dependencies")
+                    Text("自动修复越狱依赖")
                         .font(.system(size: 14, weight: .medium))
-                    Text("Automatically adjusts plugin dependencies and directory structure for device compatibility")
+                    Text("自动调整插件依赖和目录结构以兼容设备")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -45,9 +45,9 @@ struct SettingsView: View {
 
             Toggle(isOn: $optionsManager.options.enableFileAccess) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Enable File Access")
+                    Text("启用文件访问")
                         .font(.system(size: 14, weight: .medium))
-                    Text("View signed app data in the iOS Files app")
+                    Text("在 iOS 文件应用中查看已签名应用数据")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -56,9 +56,9 @@ struct SettingsView: View {
 
             Toggle(isOn: $optionsManager.options.removeAppJumps) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Remove App Redirects")
+                    Text("移除应用跳转")
                         .font(.system(size: 14, weight: .medium))
-                    Text("Remove URL Scheme redirects from the app")
+                    Text("移除应用的 URL Scheme 跳转")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -67,9 +67,9 @@ struct SettingsView: View {
 
             Toggle(isOn: $optionsManager.options.removeMinVersionLimit) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Remove Min Version Limit")
+                    Text("移除最低版本限制")
                         .font(.system(size: 14, weight: .medium))
-                    Text("Remove the minimum iOS version requirement")
+                    Text("移除 iOS 最低版本要求")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -78,30 +78,30 @@ struct SettingsView: View {
         }
 
         Section {
-            Toggle("Include App Name", isOn: Binding(
+            Toggle("包含应用名称", isOn: Binding(
                 get: { optionsManager.options.packageNameRule & 1 != 0 },
                 set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 1 : optionsManager.options.packageNameRule & ~1; optionsManager.saveOptions() }
             ))
-            Toggle("Include Version", isOn: Binding(
+            Toggle("包含版本号", isOn: Binding(
                 get: { optionsManager.options.packageNameRule & 2 != 0 },
                 set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 2 : optionsManager.options.packageNameRule & ~2; optionsManager.saveOptions() }
             ))
-            Toggle("Include Timestamp", isOn: Binding(
+            Toggle("包含时间戳", isOn: Binding(
                 get: { optionsManager.options.packageNameRule & 4 != 0 },
                 set: { optionsManager.options.packageNameRule = $0 ? optionsManager.options.packageNameRule | 4 : optionsManager.options.packageNameRule & ~4; optionsManager.saveOptions() }
             ))
         } header: {
-            Text("Package Filename")
+            Text("输出文件名")
         } footer: {
-            Text("At least one option must be selected for the output filename")
+            Text("至少需要选择一个选项作为输出文件名")
         }
 
-        Section(header: Text("Post-Signing Actions")) {
+        Section(header: Text("签名后操作")) {
             Toggle(isOn: $optionsManager.options.autoInstallAfterSign) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Auto-install After Signing")
+                    Text("签名后自动安装")
                         .font(.system(size: 14, weight: .medium))
-                    Text("Prompt to install the IPA immediately after signing")
+                    Text("签名完成后立即提示安装 IPA")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -110,9 +110,9 @@ struct SettingsView: View {
 
             Toggle(isOn: $optionsManager.options.useLocalServer) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Local Server Install")
+                    Text("本地服务器安装")
                         .font(.system(size: 14, weight: .medium))
-                    Text("Use local server with itms-services:// for fully local installation")
+                    Text("使用本地服务器通过 itms-services:// 进行完全本地安装")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -121,9 +121,9 @@ struct SettingsView: View {
 
             Toggle(isOn: $optionsManager.options.deleteAfterSign) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Delete After Signing")
+                    Text("签名后删除原文件")
                         .font(.system(size: 14, weight: .medium))
-                    Text("Automatically delete the signed IPA file after signing")
+                    Text("签名完成后自动删除已签名的 IPA 文件")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -135,12 +135,12 @@ struct SettingsView: View {
     // MARK: - Installation
     @ViewBuilder
     private func _installationSection() -> some View {
-        Section(header: Text("Installation")) {
+        Section(header: Text("安装")) {
             NavigationLink(destination: InstallationView()) {
                 HStack {
                     Image(systemName: "arrow.down.app")
                         .foregroundColor(.accentColor)
-                    Text("Installation Method")
+                    Text("安装方式")
                 }
             }
         }
@@ -149,11 +149,11 @@ struct SettingsView: View {
     // MARK: - Directories
     @ViewBuilder
     private func _directoriesSection() -> some View {
-        Section(header: Text("Directories")) {
-            _directoryLink("Unsigned Apps", icon: "doc.zipper", url: FileManager.default.unsigned)
-            _directoryLink("Signed Apps", icon: "checkmark.seal", url: FileManager.default.signed)
-            _directoryLink("Certificates", icon: "person.text.rectangle", url: FileManager.default.certificates)
-            _directoryLink("Plugins", icon: "puzzlepiece.extension", url: FileManager.default.tweaks)
+        Section(header: Text("目录")) {
+            _directoryLink("未签名应用", icon: "doc.zipper", url: FileManager.default.unsigned)
+            _directoryLink("已签名应用", icon: "checkmark.seal", url: FileManager.default.signed)
+            _directoryLink("证书", icon: "person.text.rectangle", url: FileManager.default.certificates)
+            _directoryLink("插件", icon: "puzzlepiece.extension", url: FileManager.default.tweaks)
         }
     }
 
@@ -181,16 +181,16 @@ struct SettingsView: View {
     // MARK: - About
     @ViewBuilder
     private func _aboutSection() -> some View {
-        Section(header: Text("About")) {
+        Section(header: Text("关于")) {
             HStack {
-                Text("Version")
+                Text("版本")
                 Spacer()
                 Text("\(Bundle.main.version) (\(Bundle.main.buildNumber))")
                     .foregroundColor(.secondary)
             }
 
             HStack {
-                Text("App Name")
+                Text("应用名称")
                 Spacer()
                 Text("Feather778")
                     .foregroundColor(.secondary)
@@ -202,31 +202,31 @@ struct SettingsView: View {
     @ViewBuilder
     private func _resetSection() -> some View {
         Section {
-            Button("Reset All Settings", role: .destructive) {
+            Button("重置所有设置", role: .destructive) {
                 showResetAlert = true
             }
 
-            Button("Clear All Data", role: .destructive) {
+            Button("清除所有数据", role: .destructive) {
                 showClearDataAlert = true
             }
         }
-        .alert("Reset Settings", isPresented: $showResetAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Reset", role: .destructive) {
+        .alert("重置设置", isPresented: $showResetAlert) {
+            Button("取消", role: .cancel) { }
+            Button("重置", role: .destructive) {
                 optionsManager.resetToDefaults()
-                ToastManager.shared.show("Settings reset", style: .success)
+                ToastManager.shared.show("设置已重置", style: .success)
             }
         } message: {
-            Text("This will reset all settings to default values.")
+            Text("确定要将所有设置恢复为默认值吗？")
         }
-        .alert("Clear Data", isPresented: $showClearDataAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Clear", role: .destructive) {
+        .alert("清除数据", isPresented: $showClearDataAlert) {
+            Button("取消", role: .cancel) { }
+            Button("清除", role: .destructive) {
                 ResetView.clearWorkCache()
-                ToastManager.shared.show("Cache cleared", style: .success)
+                ToastManager.shared.show("缓存已清除", style: .success)
             }
         } message: {
-            Text("This will clear the work cache. Your apps and certificates will not be affected.")
+            Text("这将清除工作缓存。您的应用和证书不会受到影响。")
         }
     }
 }

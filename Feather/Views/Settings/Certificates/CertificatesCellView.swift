@@ -18,7 +18,7 @@ struct CertificatesCellView: View {
                 .foregroundColor(.accentColor)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(cert.nickname ?? decoded?.Name ?? "Certificate")
+                Text(cert.nickname ?? decoded?.Name ?? "证书")
                     .font(.system(size: 14, weight: .medium))
 
                 if let decoded = decoded {
@@ -31,7 +31,7 @@ struct CertificatesCellView: View {
             Spacer()
 
             FRExpirationPillView(
-                title: "Valid",
+                title: "有效",
                 revoked: cert.revoked,
                 expiration: cert.expiration?.expirationInfo()
             )

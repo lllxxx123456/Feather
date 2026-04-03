@@ -30,20 +30,20 @@ struct CertificatesAddView: View {
             Form {
                 Section {
                     _fileButton(
-                        "P12 Certificate",
+                        "P12 证书",
                         icon: "key.fill",
                         file: p12URL,
                         action: { isImportingP12 = true }
                     )
 
                     _fileButton(
-                        "Provisioning Profile",
+                        "描述文件",
                         icon: "doc.text.fill",
                         file: provisionURL,
                         action: { isImportingProvision = true }
                     )
                 } header: {
-                    Text("Certificate Files")
+                    Text("证书文件")
                 }
 
                 Section {
@@ -51,7 +51,7 @@ struct CertificatesAddView: View {
                         HStack {
                             Image(systemName: "doc.zipper")
                                 .foregroundColor(.accentColor)
-                            Text("Import ZIP Archive")
+                            Text("从 ZIP 压缩包导入")
                                 .foregroundColor(.primary)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -60,31 +60,31 @@ struct CertificatesAddView: View {
                         }
                     }
                 } header: {
-                    Text("Import from ZIP")
+                    Text("从 ZIP 导入")
                 } footer: {
-                    Text("ZIP should contain .p12 and .mobileprovision files")
+                    Text("ZIP 压缩包应包含 .p12 和 .mobileprovision 文件")
                 }
 
                 Section {
-                    SecureField("Certificate Password", text: $p12Password)
+                    SecureField("证书密码", text: $p12Password)
                 } header: {
-                    Text("Password")
+                    Text("密码")
                 } footer: {
-                    Text("Enter the password for the P12 private key. Leave blank if none.")
+                    Text("输入 P12 私钥的密码。如果没有密码请留空。")
                 }
 
                 Section {
-                    TextField("Nickname (Optional)", text: $certificateName)
+                    TextField("备注名（可选）", text: $certificateName)
                 }
             }
-            .navigationTitle("Import Certificate")
+            .navigationTitle("导入证书")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") { _saveCertificate() }
+                    Button("保存") { _saveCertificate() }
                         .disabled(saveButtonDisabled || isSaving)
                         .font(.system(size: 15, weight: .semibold))
                 }
@@ -163,7 +163,6 @@ struct CertificatesAddView: View {
 
             _ = try fm.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
 
-            // Search recursively for .p12 and .mobileprovision
             var foundP12: URL?
             var foundProvision: URL?
 
@@ -188,12 +187,11 @@ struct CertificatesAddView: View {
             if let prov = foundProvision { provisionURL = prov }
 
             if foundP12 != nil && foundProvision != nil {
-                ToastManager.shared.show("Found certificate files in ZIP", style: .success)
+                ToastManager.shared.show("已在 ZIP 中找到证书文件", style: .success)
             } else {
-                ToastManager.shared.show("ZIP missing certificate files", style: .error)
+                ToastManager.shared.show("ZIP 中缺少证书文件", style: .error)
             }
 
-            // Check for password file
             let items = try fm.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
             for item in items {
                 let ext = item.pathExtension.lowercased()
@@ -204,7 +202,7 @@ struct CertificatesAddView: View {
                 }
             }
         } catch {
-            ToastManager.shared.show("Failed to extract ZIP", style: .error)
+            ToastManager.shared.show("ZIP 解压失败", style: .error)
         }
     }
 
@@ -214,7 +212,7 @@ struct CertificatesAddView: View {
             let provisionURL = provisionURL,
             FR.checkPasswordForCertificate(for: p12URL, with: p12Password, using: provisionURL)
         else {
-            ToastManager.shared.show("Invalid password, please check and try again", style: .error)
+            ToastManager.shared.show("密码无效，请检查后重试", style: .error)
             return
         }
 
@@ -230,7 +228,7 @@ struct CertificatesAddView: View {
             if let error = error {
                 ToastManager.shared.show(error.localizedDescription, style: .error)
             } else {
-                ToastManager.shared.show("Certificate imported!", style: .success)
+                ToastManager.shared.show("证书已导入！", style: .success)
                 dismiss()
             }
         }
